@@ -49,7 +49,7 @@ python3 visualizer_main.py configs/config.yaml
 
 ### Workflow Overview
 
-Our workflow integrates trajectory planning from 3D Slicer with real-time visualization. Users can create detailed trajectory plans within 3D Slicer (with the `bigss-surgery-planner` repository), as depicted in the planning interface below:
+Our workflow integrates trajectory planning from 3D Slicer with real-time visualization. Users can create detailed trajectory plans within 3D Slicer (with the [bigss-surgery-planner](https://github.com/uark-i3r-bigss/bigss-slicer-surgery-planner) repository), as depicted in the planning interface below:
 
 ![Slicer Planning Interface](images/slicer-planning.png)
 
