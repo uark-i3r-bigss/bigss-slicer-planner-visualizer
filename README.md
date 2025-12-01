@@ -1,6 +1,6 @@
-# bigss-surgery-3d-visualizer
+# bigss-slicer-planner-visualizer
 
-Tools for visualizing SE(3) kinematic chains, NIfTI models, and verifying transforms.
+Tools for visualizing SE(3) kinematic chains, NIfTI models, and verifying transforms using slicer annotations
 
 ## Installation
 
