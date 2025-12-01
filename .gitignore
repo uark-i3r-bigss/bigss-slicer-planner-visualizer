@@ -2,3 +2,4 @@ visualizer_outputs/
 example/
 __pycache__/
 *.pyc
+example_data.zip

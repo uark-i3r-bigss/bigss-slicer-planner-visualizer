@@ -1,4 +1,4 @@
-# SE(3) Visualizer & Kinematic Chain Tools
+# bigss-surgery-3d-visualizer
 
 Tools for visualizing SE(3) kinematic chains, NIfTI models, and verifying transforms.
 
@@ -15,16 +15,23 @@ Tools for visualizing SE(3) kinematic chains, NIfTI models, and verifying transf
    pip install -r requirements.txt
    ```
 
+3. Download Example Data:
+   Download `example_data.zip` from the [Releases](../../releases) page and extract it to the project root.
+   ```bash
+   unzip example_data.zip
+   ```
+   This will create an `example/` directory containing necessary models and data.
+
+
+This package relies on a refactored version of the `KilleenGeo` package developed by Benjamin Killeen. The original repository can be found [here](https://github.com/benjamindkilleen/killeengeo).
 
 ## Key Scripts
 
 - **`visualizer_main.py`**: Interactive PyVista-based visualizer. Supports hierarchical transforms, NIfTI models, and basic shapes.
-- **`se3_test.py`**: Headless verification script for checking transform logic and kinematic chain consistency.
 
 ## Configuration Files
 
 - **`configs/config.yaml`**: Main configuration for real models (Phantom, Device).
-- **`configs/config_test.yaml`**: Test scenario defining a kinematic chain using mock objects.
 
 ## Usage
 
@@ -40,12 +47,6 @@ Visualize the Phantom and Device setup.
 python3 visualizer_main.py configs/config.yaml
 ```
 
-### 3. Run Mini Visualizer (Headless)
-```bash
-python3 mini_visualizer_main.py configs/config_test.yaml
-```
-
-
 ### Workflow Overview
 
 Our workflow integrates trajectory planning from 3D Slicer with real-time visualization. Users can create detailed trajectory plans within 3D Slicer (with the `bigss-surgery-planner` repository), as depicted in the planning interface below:
@@ -56,6 +57,10 @@ These annotations are dynamically exported, allowing for immediate visualization
 
 ![Visualizer Output](images/visualizer-01.png)
 
+
+A simple example of the visualizer that demonstrates FrameTransforms and Kinematic Chain using block models is shown below (this uses configs/config_test.yaml as visualizer input):
+
+![Visualizer Output](images/visualizer-example.png)
 
 ### Contact 
 Ping-Cheng Ku (pku1@jh.edu)
