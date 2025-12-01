@@ -1,0 +1,11 @@
+numpy
+scipy
+pyvista
+nibabel
+pandas
+pyyaml
+pillow
+typing_extensions
+graphviz
+imageio
+imageio-ffmpeg

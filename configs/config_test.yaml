@@ -1,0 +1,10 @@
+transforms:
+  - name: W_from_B1
+    parent: World
+    child: Block_01
+  - name: B1_from_B2
+    parent: Block_01
+    child: Block_02
+  - name: W_from_B3
+    parent: World
+    child: Block_03

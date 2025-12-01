@@ -1,0 +1,54 @@
+objects:
+  - name: Phantom
+    abbreviation: P
+    paths:
+      model: "example/meta_data/phantom/lumbar_phantom_model.stl"
+      segmentation: "example/meta_data/phantom/lumbar_phantom_CT_seg.nii.gz"
+      landmarks: "example/meta_data/phantom/lumbar_phantom_3d_landmarks.fcsv"
+    visual_settings:
+      segmentation_color: "lightgray"
+      segmentation_opacity: 0.5
+      landmark_label_font_size: 12
+      landmark_label_color: "lightgray"
+      landmark_point_color: "red"
+      landmark_point_opacity: 1.0
+      frame_transform_color: "lightgreen"
+      
+  - name: Device
+    abbreviation: D
+    paths:
+      model: "example/meta_data/injector_device/injector_device_model.stl"
+      segmentation: "example/meta_data/injector_device/injector_device_CT_seg.nii.gz"
+      landmarks: "example/meta_data/injector_device/injector_device_3d_landmarks.fcsv"
+    visual_settings:
+      segmentation_color: "green"
+      segmentation_opacity: 0.3
+      landmark_label_font_size: 12
+      landmark_label_color: "green"
+      landmark_point_color: "red"
+      landmark_point_opacity: 1.0
+      frame_transform_color: "lightgreen"
+
+transforms:
+  - name: W_from_P
+    parent: World
+    child: Phantom
+  - name: P_from_D
+    parent: Phantom
+    child: Device
+
+vectors:
+  - name: p_tip
+    parent: Device
+    landmark_label: "DrillTip"
+    landmark_object: "Device"
+    visual_settings:
+      color: "cyan"
+      label_size: 16
+  - name: v_tip
+    parent: World
+    landmark_label: "DrillTip"
+    landmark_object: "Device"
+    visual_settings:
+      color: "magenta"
+      label_size: 16

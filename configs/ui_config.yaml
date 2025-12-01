@@ -1,0 +1,13 @@
+window:
+  width: 550
+  height: 650
+  title: "BiGSS Visualizer Controls"
+
+fonts:
+  default_size: 10
+  header_size: 12
+  matrix_font: "Courier"
+  matrix_size: 9
+
+styles:
+  padding: 5

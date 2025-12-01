@@ -1,0 +1,53 @@
+objects:
+  - name: Block_01
+    abbreviation: B1
+    type: basic_shapes
+    shape: box
+    parameters:
+      size: [20, 30, 40]
+      color: "red"
+      opacity: 0.8
+    visual_settings:
+      frame_label_color: "red"
+      frame_label_size: 12
+    initial_transform: 
+      - [1.0, 0.0, 0.0, 30.0]
+      - [0.0, 1.0, 0.0, 40.0]
+      - [0.0, 0.0, 1.0, -10.0]
+      - [0.0, 0.0, 0.0, 1.0]
+
+  - name: Block_02
+    abbreviation: B2
+    type: basic_shapes
+    shape: box
+    parameters:
+      size: [20, 20, 20]
+      color: "blue"
+      opacity: 0.6
+    visual_settings:
+      frame_label_color: "blue"
+      frame_label_size: 14
+    initial_transform:
+      - [0.866, -0.5, 0.0, 50.0]
+      - [0.5, 0.866, 0.0, 20.0]
+      - [0.0, 0.0, 1.0, 10.0]
+      - [0.0, 0.0, 0.0, 1.0]
+
+  - name: Block_03
+    abbreviation: B3
+    type: basic_shapes
+    shape: box
+    parameters:
+      size: [10, 50, 10]
+      color: "green"
+      opacity: 0.9
+    visual_settings:
+      frame_label_color: "green"
+      frame_label_size: 16
+    initial_transform:
+      - [1.0, 0.0, 0.0, -30.0]
+      - [0.0, 0.707, -0.707, -30.0]
+      - [0.0, 0.707, 0.707, 20.0]
+      - [0.0, 0.0, 0.0, 1.0]
+
+

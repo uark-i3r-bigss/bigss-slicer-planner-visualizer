@@ -1,0 +1,4 @@
+visualizer_outputs/
+example/
+__pycache__/
+*.pyc

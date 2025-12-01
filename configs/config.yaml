@@ -1,0 +1,163 @@
+logging_level: INFO
+recording_dir: "visualizer_outputs/recordings"
+objects:
+  - name: Phantom
+    abbreviation: P
+    type: model
+    paths:
+      model: "example/meta_data/phantom/lumbar_phantom_model.stl"
+      segmentation: "example/meta_data/phantom/lumbar_phantom_CT_seg.nii.gz"
+      landmarks: "example/meta_data/phantom/lumbar_phantom_3d_landmarks.fcsv"
+    visual_settings:
+      segmentation_color: "lightgray"
+      segmentation_opacity: 0.5
+      landmark_label_font_size: 12
+      landmark_label_color: "lightgray"
+      landmark_point_color: "red"
+      landmark_point_opacity: 1.0
+      frame_transform_color: "lightgreen"
+      
+  - name: Device
+    abbreviation: D
+    type: model
+    paths:
+      model: "example/meta_data/injector_device/injector_device_model.stl"
+      segmentation: "example/meta_data/injector_device/injector_device_CT_seg.nii.gz"
+      landmarks: "example/meta_data/injector_device/injector_device_3d_landmarks.fcsv"
+    visual_settings:
+      segmentation_color: "orange"
+      segmentation_opacity: 0.3
+      landmark_label_font_size: 12
+      landmark_label_color: "orange"
+      landmark_point_color: "red"
+      landmark_point_opacity: 1.0
+      frame_transform_color: "lightgreen"
+
+  - name: DeviceTip
+    abbreviation: DT
+    type: virtual
+    movable: false
+
+  - name: DeviceBack
+    abbreviation: DB
+    type: virtual
+    movable: false
+
+  - name: EntryPoint
+    abbreviation: EP
+    type: virtual
+    movable: false
+
+  - name: DynamicEntryPoint1
+    abbreviation: DEP1
+    type: virtual
+    movable: false
+
+  - name: DynamicEntryPoint2
+    abbreviation: DEP2
+    type: virtual
+    movable: false
+
+  - name: DynamicEntryPoint3
+    abbreviation: DEP3
+    type: virtual
+    movable: false
+
+transforms:
+  - name: W_from_D
+    parent: World
+    child: Device
+    constraint: "W_from_P @ P_from_DEP1 @ inv(DB_from_DT) @ inv(D_from_DB)"
+  - name: W_from_P
+    parent: World
+    child: Phantom
+  
+  - name: D_from_DB
+    parent: Device
+    child: DeviceBack
+    initial_transform:
+      - [ 0.00000000e+00,  1.00000000e+00, -3.02325692e-05,  5.68391812e+01]
+      - [-9.76409956e-01, -6.52796697e-06, -2.15924983e-01,  6.53275983e+01]
+      - [-2.15924983e-01,  2.95193815e-05,  9.76409955e-01,  2.95400000e+01]
+      - [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00]
+
+  - name: DB_from_DT
+    parent: DeviceBack
+    child: DeviceTip  
+    initial_transform:
+      - [ 1.00000000e+00,  0.00000000e+00,  0.00000000e+00,  0.00000000e+00]
+      - [ 0.00000000e+00,  1.00000000e+00,  0.00000000e+00,  0.00000000e+00]
+      - [ 0.00000000e+00,  0.00000000e+00,  1.00000000e+00,  1.86223009e+02]
+      - [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00]
+  - name: P_from_DEP1
+    parent: Phantom
+    child: DynamicEntryPoint1
+    type: dynamic_annotation
+    annotation_name: slicer_dynamic_annotation
+    vector_name: traj_1
+
+  - name: P_from_DEP2
+    parent: Phantom
+    child: DynamicEntryPoint2
+    type: dynamic_annotation
+    annotation_name: slicer_dynamic_annotation
+    vector_name: traj_2
+
+  - name: P_from_DEP3
+    parent: Phantom
+    child: DynamicEntryPoint3
+    type: dynamic_annotation
+    annotation_name: slicer_dynamic_annotation
+    vector_name: traj_3
+
+  # - name: P_from_EP
+  #   parent: Phantom
+  #   child: EntryPoint
+  #   initial_transform:
+  #     - [ 0.00000000e+00,  9.49495770e-01, -3.13779832e-01,  1.31941414e+02]
+  #     - [-2.92527924e-01,  3.00054154e-01,  9.07961959e-01, -3.81034393e+01]
+  #     - [ 9.56256981e-01,  9.17893626e-02,  2.77754026e-01,  1.07198017e+02]
+  #     - [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00]
+  
+  # - name: EP_from_DT
+  #   parent: EntryPoint
+  #   child: DeviceTip
+  #   type: dependent
+
+vectors:
+  - name: p_tip
+    parent: Device
+    landmark_label: DrillTip
+    landmark_object: Device
+  - name: v_tip
+    parent: World
+    landmark_label: DrillTip
+    landmark_object: Device
+
+annotations:
+  - name: slicer_dynamic_annotation
+    path: "/tmp/slicer_surgery_planner_points.txt"
+    type: vector
+    parent: Phantom
+    dynamic: true
+    update_frequency: 1
+    landmarks:
+      - name: traj_1
+        start: Entry_1
+        end: Target_1
+      - name: traj_2
+        start: Entry_2
+        end: Target_2
+      - name: traj_3
+        start: Entry_3
+        end: Target_3
+
+  # - name: fcsv_injection_annotation
+  #   path: "example/meta_data/annotations/injection_trajectory/injection_trajectory.fcsv"
+  #   type: vector
+  #   parent: Phantom
+  #   dynamic: false
+  #   landmarks:
+  #     - name: inj_traj
+  #       start: Entry_1
+  #       end: Target_1
