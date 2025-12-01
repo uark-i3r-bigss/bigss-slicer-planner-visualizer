@@ -21,6 +21,53 @@ import geo.core as kg
 import time 
 
 
+class ReferencePlane:
+    def __init__(self, name, parent_name, width, length, color, opacity, plotter, object_map):
+        self.name = name
+        self.parent_name = parent_name
+        self.width = width
+        self.length = length
+        self.color = color
+        self.opacity = opacity
+        self.plotter = plotter
+        self.object_map = object_map
+        
+        self.actor = None
+        self.last_parent_transform = None
+        
+        self._create_actor()
+        
+    def _create_actor(self):
+        # Create Plane centered at origin, normal to Z
+        # i_size is X size, j_size is Y size
+        self.mesh = pv.Plane(center=(0, 0, 0), direction=(0, 0, 1), i_size=self.width, j_size=self.length)
+        
+        self.actor = self.plotter.add_mesh(
+            self.mesh, 
+            color=self.color, 
+            opacity=self.opacity, 
+            show_edges=False
+        )
+        
+    def update(self):
+        parent = self.object_map.get(self.parent_name)
+        if not parent:
+            if self.actor: self.actor.VisibilityOff()
+            return
+            
+        # Check if parent transform changed
+        current_transform = parent.global_transform.data
+        
+        # Optimization: Only update if transform changed
+        if self.last_parent_transform is not None and np.allclose(self.last_parent_transform, current_transform):
+             return
+
+        self.last_parent_transform = current_transform.copy()
+        
+        if self.actor:
+            self.actor.user_matrix = current_transform
+            self.actor.VisibilityOn()
+
 class CustomVector:
     def __init__(self, name, parent_name, landmark_label, landmark_object_name, plotter, visual_settings, object_map):
         self.name = name
@@ -395,6 +442,21 @@ class SE3Visualizer:
         self.visibility_changed_callbacks = []
 
         self._load_annotations()
+        
+        # Initialize Reference Planes
+        self.reference_planes = []
+        for plane_config in self.config.get('reference_planes', []):
+            plane = ReferencePlane(
+                name=plane_config['name'],
+                parent_name=plane_config['parent'],
+                width=plane_config.get('width', 300),
+                length=plane_config.get('length', 300),
+                color=plane_config.get('color', 'blue'),
+                opacity=plane_config.get('opacity', 0.2),
+                plotter=self.plotter,
+                object_map=self.object_map
+            )
+            self.reference_planes.append(plane)
 
         # Link Objects and Calculate Local Transforms
         self._link_objects()
@@ -527,12 +589,21 @@ class SE3Visualizer:
         
         # Update Annotations
         self.update_annotations()
+        
+        # Update Reference Planes
+        self.update_reference_planes()
+        
         # Camera and Grid
         self.plotter.camera_position = 'xy'
         self.plotter.camera.zoom(1.0)
         # Calculate initial grid bounds
         self.calculate_scene_bounds()
         self.update_grid()
+
+    def update_reference_planes(self):
+        """Update all reference planes."""
+        for plane in self.reference_planes:
+            plane.update()
             
     def add_visibility_callback(self, callback):
         """Add a callback function to be called when visibility changes."""
@@ -798,17 +869,8 @@ class SE3Visualizer:
             vectors_to_create = []
             
             if 'landmarks' in ann_config:
-                # New format: list of vectors
                 vectors_to_create = ann_config['landmarks']
-            elif 'landmark_labels' in ann_config:
-                # Old format: single vector
-                old_labels = ann_config['landmark_labels']
-                vectors_to_create = [{
-                    'name': group_name, # Use group name as vector name
-                    'start': old_labels['start'],
-                    'end': old_labels['end']
-                }]
-            
+
             group_annotations = {}
             
             for vec_def in vectors_to_create:
@@ -871,13 +933,11 @@ class SE3Visualizer:
             # We need to transform points from World to Local Rigid.
             # P_local = inv(T_rigid) * P_world
             
-            # We use initial_local_transform which is the Rigid Initial Transform
             if hasattr(parent, 'initial_local_transform'):
                 T_rigid_initial = parent.initial_local_transform
             else:
-                # Fallback
                 T_rigid_initial = parent.local_transform.data
-                
+            
             T_inv = np.linalg.inv(T_rigid_initial)
             
             start_local = (T_inv @ np.append(start_point_world, 1))[:3]
@@ -1058,8 +1118,6 @@ class SE3Visualizer:
             start = parent.global_transform.t
             end = child.global_transform.t
             
-            # If child is a TransformableObject, it handles its own vector visualization.
-            # We should NOT duplicate it here.
             if hasattr(child, 'show_vector'):
                  # Ensure we clean up any old actors from this method
                  if name in self.dependent_actors:
@@ -1202,7 +1260,6 @@ class SE3Visualizer:
         actor = self.plotter.add_text(message, position='upper_left', font_size=12, color='white')
         
         # Schedule removal
-        # Note: We need to access the Tkinter root to use 'after'
         if hasattr(self, 'panel') and self.panel:
             self.panel.root.after(int(duration * 1000), lambda: self.plotter.remove_actor(actor))
 
@@ -1287,15 +1344,11 @@ class SE3Visualizer:
             logging.error(f"Error during logging: {e}")
 
     def show(self):
-        # We need to run the GUI and the Plotter together.
-        # PyVista's show(interactive_update=True) allows us to control the loop.
-        
+
         # Create Control Panel
         self.panel = ControlPanel(self)
         
         # Main Loop
-        # We use Tkinter's mainloop as the driver, and update PyVista periodically
-        
         def update_plotter():
             self._update_dependent_transforms()
             self._update_dynamic_annotations()
@@ -1303,9 +1356,7 @@ class SE3Visualizer:
             self.plotter.update()
             self.panel.root.after(16, update_plotter) # ~60 FPS
 
-        # Initialize plotter window (non-blocking)
-        # self.plotter.show(interactive=False, auto_close=False)
-        
+
         # Add key binding for screenshot
         self.plotter.add_key_event('s', self.take_screenshot)
         self.plotter.add_key_event('S', self.take_screenshot)

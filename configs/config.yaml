@@ -63,6 +63,14 @@ objects:
     type: virtual
     movable: false
 
+reference_planes:
+  - name: PhantomPlane
+    parent: Phantom
+    width: 300
+    length: 300
+    color: "blue"
+    opacity: 0.2
+
 transforms:
   - name: W_from_D
     parent: World
@@ -89,6 +97,7 @@ transforms:
       - [ 0.00000000e+00,  1.00000000e+00,  0.00000000e+00,  0.00000000e+00]
       - [ 0.00000000e+00,  0.00000000e+00,  1.00000000e+00,  1.86223009e+02]
       - [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00]
+      
   - name: P_from_DEP1
     parent: Phantom
     child: DynamicEntryPoint1
@@ -109,7 +118,7 @@ transforms:
     type: dynamic_annotation
     annotation_name: slicer_dynamic_annotation
     vector_name: traj_3
-
+    
   # - name: P_from_EP
   #   parent: Phantom
   #   child: EntryPoint

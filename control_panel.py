@@ -1737,6 +1737,7 @@ class ControlPanel:
             obj.set_translation(axis_idx, val, self.viz.transform_map)
             self.viz.update_custom_vectors()
             self.viz.update_annotations()
+            self.viz.update_reference_planes()
             # No need to call update_gui explicitly as it's scheduled
         except ValueError:
             pass
@@ -1769,6 +1770,7 @@ class ControlPanel:
             obj.set_rotation_euler(axis_idx, value, self.viz.transform_map)
             self.viz.update_custom_vectors()
             self.viz.update_annotations()
+            self.viz.update_reference_planes()
             
             # Update label immediately for responsiveness
             axis_name = ['Roll', 'Pitch', 'Yaw'][axis_idx]
@@ -1823,4 +1825,5 @@ class ControlPanel:
             obj.reset(self.viz.transform_map)
             self.viz.update_custom_vectors()
             self.viz.update_annotations()
+            self.viz.update_reference_planes()
             self.update_gui()

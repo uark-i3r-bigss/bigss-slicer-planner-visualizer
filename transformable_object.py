@@ -114,7 +114,7 @@ class TransformableObject:
             # Basic shapes are usually shown by default
             self.show_mesh = True
             self.actor.user_matrix = self.global_transform.data
-        
+
         # Create Frame Actors
         self.frame_actors = []
         self.frame_scale = 30.0
@@ -622,8 +622,13 @@ class TransformableObject:
     
     def get_rotation_euler(self):
         """Get current rotation in Euler angles (degrees)."""
+        # Calculate current scale dynamically
+        current_R = self.local_transform.R
+        current_scale = np.linalg.norm(current_R, axis=0)
+        current_scale[current_scale < 1e-9] = 1.0
+        
         # Normalize the rotation matrix by scale to get pure rotation
-        R_normalized = self.local_transform.R / self.scale
+        R_normalized = current_R / current_scale
         return Rotation.from_matrix(R_normalized).as_euler('xyz', degrees=True)
 
     def set_translation(self, axis, value, transform_map=None):
@@ -635,6 +640,11 @@ class TransformableObject:
         self.update_transform(transform_map)
 
     def set_rotation_euler(self, axis, value, transform_map=None):
+        # Calculate current scale dynamically
+        current_R = self.local_transform.R
+        current_scale = np.linalg.norm(current_R, axis=0)
+        current_scale[current_scale < 1e-9] = 1.0
+        
         # Update rotation
         current_euler = self.get_rotation_euler()
         current_euler[axis] = value
@@ -642,10 +652,10 @@ class TransformableObject:
         # Reconstruct transform
         new_R_pure = Rotation.from_euler('xyz', current_euler, degrees=True).as_matrix()
         # Re-apply scale
-        new_R_scaled = new_R_pure * self.scale
+        new_R_scaled = new_R_pure * current_scale
         
         self.local_transform.R = new_R_scaled
-        logging.info(f"[{self.name}] Set Rotation {axis}: {value} -> Euler: {self.get_rotation_euler()}")
+        logging.info(f"[{self.name}] Set Rotation {axis}: {value} -> Euler: {current_euler}")
         self.update_transform(transform_map)
 
     def set_visible(self, visible):

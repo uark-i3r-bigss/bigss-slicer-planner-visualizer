@@ -24,8 +24,7 @@ def parse_transform_expression(expression, available_transforms):
     if not expression or not expression.strip():
         raise ValueError("Empty expression")
 
-    # Normalize spacing: remove extra spaces
-    # We want to split by '@'
+
     parts = expression.split('@')
     
     result_matrix = np.eye(4)
