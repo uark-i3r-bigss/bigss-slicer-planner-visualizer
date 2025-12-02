@@ -715,3 +715,28 @@ class TransformableObject:
             dep.add_dependent(self)
             
         self.dependencies = list(new_deps_set)
+
+    def set_parent(self, new_parent):
+        """
+        Change the parent of this object.
+        Updates the parent's children list and this object's parent reference.
+        Does NOT automatically update the local transform to preserve global position; 
+        caller must handle transform updates if needed.
+        """
+        if self.parent == new_parent:
+            return
+
+        # Remove from old parent
+        if self.parent:
+            if self in self.parent.children:
+                self.parent.children.remove(self)
+        
+        # Set new parent
+        self.parent = new_parent
+        
+        # Add to new parent
+        if new_parent:
+            if self not in new_parent.children:
+                new_parent.children.append(self)
+                
+        logging.info(f"[{self.name}] Reparented to {new_parent.name if new_parent else 'None'}")

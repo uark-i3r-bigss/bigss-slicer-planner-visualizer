@@ -78,6 +78,22 @@ objects:
     type: virtual
     movable: false
 
+  - name: CArmSource
+    abbreviation: CArm
+    type: virtual
+    movable: false
+    visual_settings:
+      frame_transform_color: "cyan"
+      frame_label_color: "cyan"
+    
+  - name: DRRDetector
+    abbreviation: Det
+    type: virtual
+    movable: false
+    visual_settings:
+      frame_transform_color: "cyan"
+      frame_label_color: "cyan"
+
 
 reference_planes:
   # - name: ReferencePlane
@@ -165,6 +181,14 @@ transforms:
     annotation_name: slicer_dynamic_reference_plane_annotation
     dynamic: true 
     actor_name: ReferencePlane_2
+
+  - name: W_from_CArm
+    parent: World
+    child: CArmSource
+    
+  - name: W_from_Detector
+    parent: World
+    child: DRRDetector
 
 
   # - name: P_from_EP
