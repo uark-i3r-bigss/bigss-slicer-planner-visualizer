@@ -110,6 +110,10 @@ class ControlPanel:
         # Tab 3: Vectors
         self.tab_vectors = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_vectors, text="Vectors")
+        
+        # Tab 4: Ref Planes
+        self.tab_ref_planes = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_ref_planes, text="Ref Planes")
     
         
         # Tab 5: Calculator
@@ -148,6 +152,9 @@ class ControlPanel:
         
         # --- Vectors Tab Content ---
         self._create_vector_display(self.tab_vectors)
+        
+        # --- Ref Planes Tab Content ---
+        self._create_ref_plane_tab(self.tab_ref_planes)
         
 
         
@@ -659,6 +666,30 @@ class ControlPanel:
             self.vec_info_labels[field] = lbl
 
 
+    def _create_ref_plane_tab(self, parent):
+        frame = ttk.LabelFrame(parent, text="Reference Plane Selection", padding="5")
+        frame.pack(fill=tk.X, pady=5)
+        
+        # Dropdown for Plane Selection
+        self.ref_plane_var = tk.StringVar()
+        self.ref_plane_combo = ttk.Combobox(frame, textvariable=self.ref_plane_var, state="readonly")
+        self.ref_plane_combo.pack(fill=tk.X, padx=5, pady=5)
+        self.ref_plane_combo.bind('<<ComboboxSelected>>', lambda e: self.update_gui())
+        
+        # Info Display
+        info_frame = ttk.LabelFrame(parent, text="Plane Details", padding="5")
+        info_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        self.ref_plane_info_labels = {}
+        fields = ["Name", "Parent", "Width", "Height", "Center (World)"]
+        
+        for i, field in enumerate(fields):
+            row = ttk.Frame(info_frame)
+            row.pack(fill=tk.X, pady=2)
+            ttk.Label(row, text=f"{field}:", width=15, anchor=tk.W).pack(side=tk.LEFT)
+            lbl = ttk.Label(row, text="-", anchor=tk.W)
+            lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            self.ref_plane_info_labels[field] = lbl
 
     def _create_calculator_tab(self, parent):
         # Equation Display
@@ -1472,6 +1503,38 @@ class ControlPanel:
         else:
             # Clear info
             for lbl in self.vec_info_labels.values():
+                lbl.config(text="-")
+                
+        # --- Update Ref Planes Tab ---
+        visible_planes = []
+        if hasattr(self.viz, 'reference_planes'):
+            for plane in self.viz.reference_planes:
+                if plane.visible:
+                    visible_planes.append(plane.name)
+        visible_planes.sort()
+        
+        if list(self.ref_plane_combo['values']) != visible_planes:
+            self.ref_plane_combo['values'] = visible_planes
+            
+        current_plane_sel = self.ref_plane_var.get()
+        if current_plane_sel and current_plane_sel not in visible_planes:
+            self.ref_plane_var.set("")
+            current_plane_sel = ""
+            
+        if current_plane_sel:
+            plane_obj = next((p for p in self.viz.reference_planes if p.name == current_plane_sel), None)
+            if plane_obj:
+                self.ref_plane_info_labels["Name"].config(text=plane_obj.name)
+                self.ref_plane_info_labels["Parent"].config(text=plane_obj.parent_name)
+                self.ref_plane_info_labels["Width"].config(text=f"{plane_obj.width:.2f}")
+                self.ref_plane_info_labels["Height"].config(text=f"{plane_obj.length:.2f}")
+                
+                # Center
+                if plane_obj.actor:
+                    center = plane_obj.actor.user_matrix[:3, 3]
+                    self.ref_plane_info_labels["Center (World)"].config(text=f"[{center[0]:.2f}, {center[1]:.2f}, {center[2]:.2f}]")
+        else:
+            for lbl in self.ref_plane_info_labels.values():
                 lbl.config(text="-")
         
         # Update controls for the active object or transform

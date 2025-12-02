@@ -34,14 +34,15 @@ class ReferencePlane:
         
         self.actor = None
         self.last_parent_transform = None
+        self.local_transform = np.eye(4) # Transform from Parent to Plane
+        self.visible = True
+        self.last_global_transform = None
         
-        self._create_actor()
+        self._create_actors()
         
-    def _create_actor(self):
-        # Create Plane centered at origin, normal to Z
-        # i_size is X size, j_size is Y size
+    def _create_actors(self):
+        # 1. Plane Mesh
         self.mesh = pv.Plane(center=(0, 0, 0), direction=(0, 0, 1), i_size=self.width, j_size=self.length)
-        
         self.actor = self.plotter.add_mesh(
             self.mesh, 
             color=self.color, 
@@ -49,24 +50,45 @@ class ReferencePlane:
             show_edges=False
         )
         
+    def update_dimensions(self, width, height):
+        """Update plane dimensions."""
+        if abs(self.width - width) > 1e-3 or abs(self.length - height) > 1e-3:
+            self.width = width
+            self.length = height
+            # Recreate mesh
+            if self.actor: self.plotter.remove_actor(self.actor)
+            self.mesh = pv.Plane(center=(0, 0, 0), direction=(0, 0, 1), i_size=self.width, j_size=self.length)
+            self.actor = self.plotter.add_mesh(self.mesh, color=self.color, opacity=self.opacity, show_edges=False)
+            return True
+        return False
+
     def update(self):
         parent = self.object_map.get(self.parent_name)
         if not parent:
-            if self.actor: self.actor.VisibilityOff()
+            self._set_visibility(False)
             return
             
-        # Check if parent transform changed
-        current_transform = parent.global_transform.data
-        
-        # Optimization: Only update if transform changed
-        if self.last_parent_transform is not None and np.allclose(self.last_parent_transform, current_transform):
-             return
+        if not self.visible:
+            self._set_visibility(False)
+            return
 
-        self.last_parent_transform = current_transform.copy()
+        # Calculate Global Transform of the Plane
+        # W_from_Plane = W_from_P @ P_from_Plane
+        global_transform = parent.global_transform.data @ self.local_transform
         
+        # Check if transform changed
+        if self.last_global_transform is None or not np.allclose(self.last_global_transform, global_transform, atol=1e-3):
+            self.last_global_transform = global_transform
+            
+            # Update Plane Actor
+            if self.actor:
+                self.actor.user_matrix = global_transform
+                self.actor.VisibilityOn()
+
+    def _set_visibility(self, visible):
         if self.actor:
-            self.actor.user_matrix = current_transform
-            self.actor.VisibilityOn()
+            if visible: self.actor.VisibilityOn()
+            else: self.actor.VisibilityOff()
 
 class CustomVector:
     def __init__(self, name, parent_name, landmark_label, landmark_object_name, plotter, visual_settings, object_map):
@@ -277,22 +299,30 @@ class Annotation:
         self.actor.user_matrix = self.last_matrix
         
         # Update Label
-        if self.label_actor:
-            self.plotter.remove_actor(self.label_actor)
-            
         if self.visible:
             # Calculate new world position for label
             midpoint_local = (self.start_point + self.end_point) / 2
             midpoint_world = (parent.global_transform.data @ np.append(midpoint_local, 1))[:3]
             
-            self.label_actor = self.plotter.add_point_labels(
-                [midpoint_world], [self.name],
-                font_size=self.label_size, text_color=self.label_color,
-                show_points=False, always_visible=True
-            )
-            self.current_midpoint_world = midpoint_world
+            # Check if label needs update
+            if self.label_actor and self.current_midpoint_world is not None and \
+               np.allclose(midpoint_world, self.current_midpoint_world, atol=1e-3):
+                pass # No change needed
+            else:
+                # Recreate label
+                if self.label_actor:
+                    self.plotter.remove_actor(self.label_actor)
+                    
+                self.label_actor = self.plotter.add_point_labels(
+                    [midpoint_world], [self.name],
+                    font_size=self.label_size, text_color=self.label_color,
+                    show_points=False, always_visible=True
+                )
+                self.current_midpoint_world = midpoint_world
         else:
-            self.label_actor = None
+            if self.label_actor:
+                self.plotter.remove_actor(self.label_actor)
+                self.label_actor = None
         
         # Calculate start and end in world frame for logging
         self.current_start_world = (parent.global_transform.data @ np.append(self.start_point, 1))[:3]
@@ -432,11 +462,20 @@ class SE3Visualizer:
         
         # Pre-compute dependent transforms map
         for t in self.config.get('transforms', []):
-            if t.get('type') == 'dynamic_annotation':
-                key = (t.get('annotation_name'), t.get('vector_name'))
-                if key not in self.dependent_transforms_map:
-                    self.dependent_transforms_map[key] = []
-                self.dependent_transforms_map[key].append(t)
+            # Support 'dynamic_annotation' type or dynamic: true flag
+            t_type = t.get('type')
+            is_dynamic = t.get('dynamic', False)
+            
+            if t_type == 'dynamic_annotation' or is_dynamic:
+                # Support actor_name or vector_name
+                vec_name = t.get('actor_name') or t.get('vector_name')
+                ann_name = t.get('annotation_name')
+                
+                if ann_name and vec_name:
+                    key = (ann_name, vec_name)
+                    if key not in self.dependent_transforms_map:
+                        self.dependent_transforms_map[key] = []
+                    self.dependent_transforms_map[key].append(t)
         
         # Callbacks
         self.visibility_changed_callbacks = []
@@ -586,6 +625,12 @@ class SE3Visualizer:
             
         # Update Custom Vectors
         self.update_custom_vectors()
+        
+        # Update Dynamic Annotations (Trajectory Planner)
+        self._update_dynamic_annotations()
+        
+        # Update Dynamic Reference Planes
+        self._update_dynamic_transforms()
         
         # Update Annotations
         self.update_annotations()
@@ -842,8 +887,17 @@ class SE3Visualizer:
             # Top-level config for this file/group
             group_name = ann_config.get('name', 'annotation')
             type_ = ann_config.get('type', 'vector')
-            parent_name = ann_config['parent']
-            path = ann_config['path']
+            
+            # Skip reference planes (handled separately)
+            if type_ == 'reference_plane':
+                continue
+                
+            parent_name = ann_config.get('parent')
+            path = ann_config.get('path')
+            
+            if not parent_name or not path:
+                continue
+
             is_dynamic = ann_config.get('dynamic', False)
             update_freq = ann_config.get('update_frequency', 1.0)
             
@@ -953,78 +1007,93 @@ class SE3Visualizer:
         visibility_changed = False
         
         for group in self.dynamic_groups:
-            if force_update_all or current_time - group['last_update'] > (1.0 / group['frequency']):
-                try:
-                    # Reload landmarks
-                    lms = load_landmarks(group['path'])
-                    logging.debug(f"Loaded labels from {group['path']}: {lms['labels']}")
+            # Frequency Check
+            if current_time - group['last_update'] < (1.0 / group['frequency']):
+                continue
+                
+            # File MTime Check
+            if not os.path.exists(group['path']):
+                continue
+                
+            mtime = os.path.getmtime(group['path'])
+            last_mtime = group.get('last_mtime', 0)
+            
+            if not force_update_all and mtime <= last_mtime:
+                continue
+                
+            group['last_mtime'] = mtime
+            
+            try:
+                # Reload landmarks
+                lms = load_landmarks(group['path'])
+                logging.debug(f"Loaded labels from {group['path']}: {lms['labels']}")
+                
+                for vec_def in group['vectors_def']:
+                    vec_name = vec_def['name']
+                    start_label = vec_def['start']
+                    end_label = vec_def['end']
                     
-                    for vec_def in group['vectors_def']:
-                        vec_name = vec_def['name']
-                        start_label = vec_def['start']
-                        end_label = vec_def['end']
+                    if vec_name not in group['annotations']:
+                        # Should not happen with new logic, but safe fallback
+                        logging.warning(f"Annotation object {vec_name} not found in group {group['name']}. Hiding dependent frames.")
+                        if self._update_dependent_frames(group['name'], vec_name, None, None, visible=False):
+                            visibility_changed = True
+                        continue
                         
-                        if vec_name not in group['annotations']:
-                            # Should not happen with new logic, but safe fallback
-                            logging.warning(f"Annotation object {vec_name} not found in group {group['name']}. Hiding dependent frames.")
-                            if self._update_dependent_frames(group['name'], vec_name, None, None, visible=False):
-                                visibility_changed = True
-                            continue
-                            
-                        ann = group['annotations'][vec_name]
-                        
-                        if start_label in lms['labels'] and end_label in lms['labels']:
-                            start_idx = lms['labels'].index(start_label)
-                            end_idx = lms['labels'].index(end_label)
-                            
-                            start_point_world = lms['points'][start_idx]
-                            end_point_world = lms['points'][end_idx]
-                            
-                            # Convert to local frame of parent
-                            start_local, end_local = self._to_local_frame(group['parent_name'], start_point_world, end_point_world)
-                            
-                            if start_local is not None:
-                                # Debug diff
-                                if logging.getLogger().isEnabledFor(logging.INFO):
-                                    diff_start = np.linalg.norm(start_local - ann.start_point)
-                                    diff_end = np.linalg.norm(end_local - ann.end_point)
-                                    if diff_start > 1e-6 or diff_end > 1e-6:
-                                        logging.info(f"[{vec_name}] Check update. Diff S: {diff_start:.6f}, Diff E: {diff_end:.6f}")
-                                
-                                # Only update if points have changed significantly OR if it was hidden
-                                if not ann.visible or \
-                                   not np.allclose(start_local, ann.start_point, atol=1e-3) or \
-                                   not np.allclose(end_local, ann.end_point, atol=1e-3):
-                                    
-                                    if not ann.visible:
-                                        logging.info(f"[{vec_name}] Vector reappeared. Showing annotation.")
-                                    else:
-                                        logging.info(f"[{vec_name}] Updating! Points changed.")
-                                        
-                                    ann.update_points(start_local, end_local)
-                                    if ann.set_visible(True): visibility_changed = True
-                                    
-                                    # Ensure transform is reapplied
-                                    ann.update(self.object_map)
-                                    
-                                    # Update any dependent frames (Visible)
-                                    logging.info(f"Updating dependent frames for {vec_name} with start {start_local} end {end_local}")
-                                    if self._update_dependent_frames(group['name'], vec_name, start_local, end_local, visible=True):
-                                        visibility_changed = True
-                        else:
-                            # Vector missing in current file
-                            if ann.visible:
-                                logging.info(f"[{vec_name}] Vector missing in file. Hiding annotation.")
-                            if ann.set_visible(False): visibility_changed = True
-                            # Update dependent frames (Hidden)
-                            if self._update_dependent_frames(group['name'], vec_name, None, None, visible=False):
-                                visibility_changed = True
-                                
-                    group['last_update'] = current_time
+                    ann = group['annotations'][vec_name]
                     
-                except Exception as e:
-                    # Suppress errors to avoid spamming console
-                    logging.error(f"Error updating dynamic annotation {group['path']}: {e}")
+                    if start_label in lms['labels'] and end_label in lms['labels']:
+                        start_idx = lms['labels'].index(start_label)
+                        end_idx = lms['labels'].index(end_label)
+                        
+                        start_point_world = lms['points'][start_idx]
+                        end_point_world = lms['points'][end_idx]
+                        
+                        # Convert to local frame of parent
+                        start_local, end_local = self._to_local_frame(group['parent_name'], start_point_world, end_point_world)
+                        
+                        if start_local is not None:
+                            # Debug diff
+                            if logging.getLogger().isEnabledFor(logging.INFO):
+                                diff_start = np.linalg.norm(start_local - ann.start_point)
+                                diff_end = np.linalg.norm(end_local - ann.end_point)
+                                if diff_start > 1e-6 or diff_end > 1e-6:
+                                    logging.info(f"[{vec_name}] Check update. Diff S: {diff_start:.6f}, Diff E: {diff_end:.6f}")
+                            
+                            # Only update if points have changed significantly OR if it was hidden
+                            if not ann.visible or \
+                               not np.allclose(start_local, ann.start_point, atol=1e-3) or \
+                               not np.allclose(end_local, ann.end_point, atol=1e-3):
+                                
+                                if not ann.visible:
+                                    logging.info(f"[{vec_name}] Vector reappeared. Showing annotation.")
+                                else:
+                                    logging.info(f"[{vec_name}] Updating! Points changed.")
+                                    
+                                ann.update_points(start_local, end_local)
+                                if ann.set_visible(True): visibility_changed = True
+                                
+                                # Ensure transform is reapplied
+                                ann.update(self.object_map)
+                                
+                                # Update any dependent frames (Visible)
+                                logging.info(f"Updating dependent frames for {vec_name} with start {start_local} end {end_local}")
+                                if self._update_dependent_frames(group['name'], vec_name, start_local, end_local, visible=True):
+                                    visibility_changed = True
+                    else:
+                        # Vector missing in current file
+                        if ann.visible:
+                            logging.info(f"[{vec_name}] Vector missing in file. Hiding annotation.")
+                        if ann.set_visible(False): visibility_changed = True
+                        # Update dependent frames (Hidden)
+                        if self._update_dependent_frames(group['name'], vec_name, None, None, visible=False):
+                            visibility_changed = True
+                            
+                group['last_update'] = current_time
+                
+            except Exception as e:
+                # Suppress errors to avoid spamming console
+                logging.error(f"Error updating dynamic annotation {group['path']}: {e}")
                     
         if visibility_changed:
             self._trigger_visibility_callbacks()
@@ -1100,9 +1169,11 @@ class SE3Visualizer:
     def _update_dependent_transforms(self):
         """Update visualization for dependent transforms."""
         for t_config in self.config['transforms']:
-            # Allow both 'dependent' and 'dynamic_annotation' types
+            # Allow 'dependent', 'dynamic_annotation', or any transform with dynamic: true
             t_type = t_config.get('type')
-            if t_type != 'dependent' and t_type != 'dynamic_annotation':
+            is_dynamic = t_config.get('dynamic', False)
+            
+            if t_type != 'dependent' and t_type != 'dynamic_annotation' and not is_dynamic:
                 continue
                 
             name = t_config['name']
@@ -1176,6 +1247,148 @@ class SE3Visualizer:
                 'last_start': start,
                 'last_end': end
             }
+
+    def _convert_ras_to_lps(self, matrix_ras):
+        """Convert a matrix from RAS to LPS coordinate system."""
+        # T_lps = Conversion @ T_ras
+        # Conversion matrix for RAS to LPS (flip X and Y)
+        conversion = np.diag([-1, -1, 1, 1])
+        return conversion @ matrix_ras
+
+    def _update_dynamic_transforms(self):
+        """Update transforms from dynamic annotation files."""
+        if not hasattr(self, 'dynamic_transform_updates'):
+            self.dynamic_transform_updates = {} # Stores last update time
+        if not hasattr(self, 'dynamic_file_mtimes'):
+            self.dynamic_file_mtimes = {} # Stores last file mtime
+            
+        current_time = time.time()
+        
+        # Group dynamic transforms by annotation file
+        # Key: Annotation Name, Value: List of transform configs
+        ann_transforms = {}
+        
+        for t_config in self.config.get('transforms', []):
+            if not t_config.get('dynamic', False):
+                continue
+            
+            ann_name = t_config.get('annotation_name')
+            if not ann_name: continue
+            
+            if ann_name not in ann_transforms:
+                ann_transforms[ann_name] = []
+            ann_transforms[ann_name].append(t_config)
+            
+        # Process each annotation group
+        for ann_name, t_configs in ann_transforms.items():
+            # Find annotation config
+            ann_config = next((a for a in self.config.get('annotations', []) if a.get('name') == ann_name), None)
+            if not ann_config: continue
+            
+            # Only process reference planes here (trajectories are handled by _update_dynamic_annotations)
+            if ann_config.get('type') != 'reference_plane':
+                continue
+            
+            file_path = ann_config.get('path')
+            if not file_path: continue
+            
+            # 1. Frequency Check
+            freq = ann_config.get('update_frequency', 1.0)
+            last_update = self.dynamic_transform_updates.get(ann_name, 0)
+            if current_time - last_update < (1.0 / freq):
+                continue
+            self.dynamic_transform_updates[ann_name] = current_time
+            
+            # 2. File Existence & MTime Check
+            if not os.path.exists(file_path):
+                continue
+                
+            mtime = os.path.getmtime(file_path)
+            last_mtime = self.dynamic_file_mtimes.get(file_path, 0)
+            
+            # If file hasn't changed, skip reading
+            if mtime <= last_mtime:
+                continue
+            self.dynamic_file_mtimes[file_path] = mtime
+            
+            try:
+                # 3. Parse File
+                with open(file_path, 'r') as f:
+                    lines = f.readlines()
+                
+                # Parse Planes/Transforms from file
+                # We assume the file format is CSV: Name, Matrix(16), Width, Height
+                file_data = {}
+                for line in lines:
+                    if line.startswith('#') or not line.strip():
+                        continue
+                    if line.startswith('PlaneName'): # Header
+                        continue
+                        
+                    parts = line.strip().split(',')
+                    if len(parts) < 17: continue # At least Name + 16 matrix
+                    
+                    name = parts[0].strip()
+                    matrix = np.array([float(x) for x in parts[1:17]]).reshape(4, 4)
+                    
+                    width = 0.0
+                    height = 0.0
+                    if len(parts) >= 19:
+                        width = float(parts[17])
+                        height = float(parts[18])
+                    
+                    # Convert RAS to LPS
+                    matrix_lps = self._convert_ras_to_lps(matrix)
+                    file_data[name] = {'matrix': matrix_lps, 'width': width, 'height': height}
+                
+                # 4. Update Transforms
+                for t_config in t_configs:
+                    # Support actor_name, reference_plane_name, or vector_name
+                    actor_name = t_config.get('actor_name') or t_config.get('reference_plane_name') or t_config.get('vector_name')
+                    if not actor_name: continue
+                    
+                    data = file_data.get(actor_name)
+                    if not data:
+                        # logging.warning(f"Actor {actor_name} not found in {file_path}")
+                        continue
+                        
+                    child_name = t_config.get('child')
+                    parent_name = t_config.get('parent')
+                    
+                    child_obj = self.object_map.get(child_name)
+                    parent_obj = self.object_map.get(parent_name)
+                    
+                    if child_obj and parent_obj:
+                        # Calculate Local Transform: P_from_Child = inv(W_from_P) @ W_from_Child
+                        w_from_child = data['matrix']
+                        w_from_p = parent_obj.global_transform.data
+                        p_from_w = np.linalg.inv(w_from_p)
+                        p_from_child = p_from_w @ w_from_child
+                        
+                        # Check for significant change
+                        current_local = child_obj.local_transform
+                        if isinstance(current_local, kg.FrameTransform):
+                            current_local = current_local.data
+                            
+                        if not np.allclose(current_local, p_from_child, atol=1e-3):
+                            # Update Child's Local Transform
+                            if isinstance(child_obj.local_transform, kg.FrameTransform):
+                                 child_obj.local_transform = kg.FrameTransform(p_from_child)
+                            else:
+                                 child_obj.local_transform = p_from_child
+                            
+                            logging.info(f"[{child_name}] Updated dynamic transform from {actor_name}")
+                            
+                            # 5. Update Dimensions of ReferencePlane children
+                            # If the child object (Frame) has children that are ReferencePlanes, update them.
+                            # We need to find objects that have 'parent' == child_name and are ReferencePlane
+                            for plane in self.reference_planes:
+                                if plane.parent_name == child_name:
+                                    if plane.update_dimensions(data['width'], data['height']):
+                                        logging.info(f"[{plane.name}] Updated dimensions: {data['width']}x{data['height']}")
+
+            except Exception as e:
+                logging.error(f"Error updating dynamic transforms from {file_path}: {e}")
 
     def calculate_scene_bounds(self):
         """Calculate bounds based on all loaded objects."""
@@ -1350,11 +1563,25 @@ class SE3Visualizer:
         
         # Main Loop
         def update_plotter():
-            self._update_dependent_transforms()
+            # 1. Update Dynamic Inputs (Local Transforms)
+            self._update_dynamic_transforms() 
             self._update_dynamic_annotations()
-            self.log_data() # Check and perform logging
+            
+            # 2. Update All Objects (Global Transforms & Actors)
+            for obj in self.objects:
+                obj.update_transform(self.transform_map)
+                
+            # 3. Update Dependent Visuals (Arrows, Planes, etc.)
+            self._update_dependent_transforms()
+            self.update_reference_planes()
+            self.update_custom_vectors()
+            self.update_annotations()
+            
+            # 4. Logging & Render
+            self.log_data() 
             self.plotter.update()
             self.panel.root.after(16, update_plotter) # ~60 FPS
+
 
 
         # Add key binding for screenshot
