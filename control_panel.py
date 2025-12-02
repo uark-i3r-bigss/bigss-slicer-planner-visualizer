@@ -11,6 +11,9 @@ import yaml
 from PIL import Image, ImageTk
 import generate_diagram
 import logging
+import requests
+from datetime import datetime
+import glob
 
 class ControlPanel:
     def __init__(self, visualizer):
@@ -690,6 +693,132 @@ class ControlPanel:
             lbl = ttk.Label(row, text="-", anchor=tk.W)
             lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
             self.ref_plane_info_labels[field] = lbl
+            
+        # Generate DRR Button
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        self.btn_gen_drr = ttk.Button(btn_frame, text="Generate DRR", command=self.on_generate_drr)
+        self.btn_gen_drr.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 2))
+        
+        self.btn_refresh_drr = ttk.Button(btn_frame, text="Refresh DRR", command=self.on_refresh_drr)
+        self.btn_refresh_drr.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(2, 0))
+        
+        # DRR Display Canvas
+        self.drr_canvas = tk.Canvas(frame, bg='black', height=350)
+        self.drr_canvas.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Bind resize
+        self.drr_canvas.bind("<Configure>", self.on_drr_canvas_resize)
+
+    def on_generate_drr(self):
+        """Send request to generate DRR for the selected plane."""
+        current_plane_sel = self.ref_plane_var.get()
+        if not current_plane_sel:
+            logging.warning("No reference plane selected for DRR generation.")
+            return
+            
+        plane_obj = next((p for p in self.viz.reference_planes if p.name == current_plane_sel), None)
+        if not plane_obj or not plane_obj.actor:
+            logging.error(f"Could not find plane object or actor for {current_plane_sel}")
+            return
+            
+        # Get Global Transform (RAS)
+        matrix_ras = np.array(plane_obj.actor.user_matrix)
+        
+        # Convert to LPS (flip X and Y)
+        conversion = np.diag([-1, -1, 1, 1])
+        matrix_lps = conversion @ matrix_ras
+        
+        # Prepare Output Path
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{timestamp}_{current_plane_sel}_drr.png"
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "visualizer_outputs", "reference_plane_drr")
+        os.makedirs(output_dir, exist_ok=True)
+        save_path = os.path.join(output_dir, filename)
+        
+        # Send Request
+        url = "http://localhost:5000/generate_drr"
+        payload = {
+            "plane_matrix": matrix_lps.tolist(),
+            "save_path": save_path
+        }
+        
+        try:
+            logging.info(f"Requesting DRR for {current_plane_sel}...")
+            response = requests.post(url, json=payload)
+            
+            if response.status_code == 200:
+                logging.info(f"DRR generated successfully: {save_path}")
+                # Auto-refresh display
+                self.root.after(100, self.on_refresh_drr)
+            else:
+                logging.error(f"DRR generation failed: {response.text}")
+                
+        except requests.exceptions.ConnectionError:
+            logging.error("Could not connect to DRR service. Is generate_intraoperative_deepdrr.py running?")
+        except Exception as e:
+            logging.error(f"Error requesting DRR: {e}")
+
+    def on_refresh_drr(self):
+        """Find and display the latest DRR for the selected plane."""
+        current_plane_sel = self.ref_plane_var.get()
+        if not current_plane_sel:
+            self.drr_canvas.delete("all")
+            return
+            
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "visualizer_outputs", "reference_plane_drr")
+        if not os.path.exists(output_dir):
+            return
+            
+        # Find files matching pattern
+        pattern = os.path.join(output_dir, f"*_{current_plane_sel}_drr.png")
+        files = glob.glob(pattern)
+        
+        if not files:
+            logging.info(f"No DRR images found for {current_plane_sel}")
+            self.drr_canvas.delete("all")
+            return
+            
+        # Sort by filename (timestamp prefix ensures chronological order)
+        latest_file = sorted(files)[-1]
+        
+        try:
+            self.original_drr_image = Image.open(latest_file)
+            self.display_drr_image()
+            logging.info(f"Displayed latest DRR: {os.path.basename(latest_file)}")
+        except Exception as e:
+            logging.error(f"Error loading DRR image: {e}")
+
+    def on_drr_canvas_resize(self, event):
+        if hasattr(self, 'original_drr_image'):
+            self.display_drr_image()
+
+    def display_drr_image(self):
+        if not hasattr(self, 'original_drr_image'):
+            return
+            
+        # Get canvas size
+        canvas_width = self.drr_canvas.winfo_width()
+        canvas_height = self.drr_canvas.winfo_height()
+        
+        if canvas_width <= 1 or canvas_height <= 1:
+            return
+            
+        # Calculate scale to fit (preserve aspect ratio)
+        img_width, img_height = self.original_drr_image.size
+        scale = min(canvas_width / img_width, canvas_height / img_height)
+        
+        # Resize
+        new_width = int(img_width * scale)
+        new_height = int(img_height * scale)
+        
+        resized_image = self.original_drr_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        self.tk_drr_image = ImageTk.PhotoImage(resized_image)
+        
+        # Display
+        self.drr_canvas.delete("all")
+        self.drr_canvas.create_image(canvas_width // 2, canvas_height // 2, anchor=tk.CENTER, image=self.tk_drr_image)
 
     def _create_calculator_tab(self, parent):
         # Equation Display

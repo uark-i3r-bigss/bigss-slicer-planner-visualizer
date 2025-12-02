@@ -57,10 +57,16 @@ These annotations are dynamically exported, allowing for immediate visualization
 
 ![Visualizer Output](images/visualizer-01.png)
 
+The current module now supports DRR generation with annotated plane in 3D Slicer. The DRRs are generated in real-time by sending requests to a DRR generation service (repo to be shared) and displayed in the visualizer. The left image shows the control of plane definition in 3D Slicer, and the right image shows the DRRs generated in real-time.
+
+<img src="images/visualizer-02-left.png" width="29%" /> <img src="images/visualizer-02-right.png" width="69%" />
+
 
 A simple example of the visualizer that demonstrates FrameTransforms and Kinematic Chain using block models is shown below (this uses configs/config_test.yaml as visualizer input):
 
 ![Visualizer Output](images/visualizer-example.png)
+
+
 
 ### Contact 
 Ping-Cheng Ku (pku1@jh.edu)
