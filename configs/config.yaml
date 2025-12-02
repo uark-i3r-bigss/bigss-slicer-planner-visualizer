@@ -73,13 +73,13 @@ objects:
     type: virtual
     movable: false
 
-  # - name: DynamicReferencePlaneFrame2
-  #   abbreviation: DRP2
-  #   type: virtual
-  #   movable: false
+  - name: DynamicReferencePlaneFrame2
+    abbreviation: DRP2
+    type: virtual
+    movable: false
 
 
-# reference_planes:
+reference_planes:
   # - name: ReferencePlane
   #   parent: ReferencePlaneFrame
   #   width: 300
@@ -87,21 +87,21 @@ objects:
   #   color: "blue"
   #   opacity: 0.2
 
-  # - name: DynamicReferencePlane1
-  #   parent: DynamicReferencePlaneFrame1
-  #   width: 300
-  #   length: 300
-  #   color: "blue"
-  #   opacity: 0.2
-  #   dynamic: true
+  - name: DynamicReferencePlane1
+    parent: DynamicReferencePlaneFrame1
+    width: 300
+    length: 300
+    color: "blue"
+    opacity: 0.2
+    dynamic: true
   
-  # - name: DynamicReferencePlane2
-  #   parent: DynamicReferencePlaneFrame2
-  #   width: 300
-  #   length: 300
-  #   color: "blue"
-  #   opacity: 0.2
-  #   dynamic: true
+  - name: DynamicReferencePlane2
+    parent: DynamicReferencePlaneFrame2
+    width: 300
+    length: 300
+    color: "blue"
+    opacity: 0.2
+    dynamic: true
     
 
 transforms:
@@ -159,12 +159,12 @@ transforms:
     dynamic: true 
     actor_name: ReferencePlane_1
 
-  # - name: P_from_DRP2
-  #   parent: Phantom
-  #   child: DynamicReferencePlaneFrame2
-  #   annotation_name: slicer_dynamic_reference_plane_annotation
-  #   dynamic: true 
-  #   actor_name: ReferencePlane_2
+  - name: P_from_DRP2
+    parent: Phantom
+    child: DynamicReferencePlaneFrame2
+    annotation_name: slicer_dynamic_reference_plane_annotation
+    dynamic: true 
+    actor_name: ReferencePlane_2
 
 
   # - name: P_from_EP

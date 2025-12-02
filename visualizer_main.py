@@ -1379,13 +1379,13 @@ class SE3Visualizer:
                             
                             logging.info(f"[{child_name}] Updated dynamic transform from {actor_name}")
                             
-                            # 5. Update Dimensions of ReferencePlane children
-                            # If the child object (Frame) has children that are ReferencePlanes, update them.
-                            # We need to find objects that have 'parent' == child_name and are ReferencePlane
-                            for plane in self.reference_planes:
-                                if plane.parent_name == child_name:
-                                    if plane.update_dimensions(data['width'], data['height']):
-                                        logging.info(f"[{plane.name}] Updated dimensions: {data['width']}x{data['height']}")
+                        # 5. Update Dimensions of ReferencePlane children
+                        # If the child object (Frame) has children that are ReferencePlanes, update them.
+                        # We need to find objects that have 'parent' == child_name and are ReferencePlane
+                        for plane in self.reference_planes:
+                            if plane.parent_name == child_name:
+                                if plane.update_dimensions(data['width'], data['height']):
+                                    logging.info(f"[{plane.name}] Updated dimensions: {data['width']}x{data['height']}")
 
             except Exception as e:
                 logging.error(f"Error updating dynamic transforms from {file_path}: {e}")
