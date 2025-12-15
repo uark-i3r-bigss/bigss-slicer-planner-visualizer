@@ -383,7 +383,7 @@ class SE3Visualizer:
         if 'objects' not in self.config:
             self.config['objects'] = self._resolve_objects_from_libraries(project_root)
         
-        for obj_config in self.config['objects']:
+        for obj_config in (self.config.get('objects') or []):
             name = obj_config['name']
             abbr = obj_config['abbreviation']
             if abbr == "W":
@@ -461,7 +461,7 @@ class SE3Visualizer:
         self.dependent_transforms_map = {} # (ann_name, vec_name) -> list of transform configs
         
         # Pre-compute dependent transforms map
-        for t in self.config.get('transforms', []):
+        for t in (self.config.get('transforms') or []):
             # Support 'dynamic_annotation' type or dynamic: true flag
             t_type = t.get('type')
             is_dynamic = t.get('dynamic', False)
@@ -484,7 +484,7 @@ class SE3Visualizer:
         
         # Initialize Reference Planes
         self.reference_planes = []
-        for plane_config in self.config.get('reference_planes', []):
+        for plane_config in (self.config.get('reference_planes') or []):
             plane = ReferencePlane(
                 name=plane_config['name'],
                 parent_name=plane_config['parent'],
@@ -504,7 +504,7 @@ class SE3Visualizer:
         
         # Build Transform Map (Transform Name -> Object)
         self.transform_map = {}
-        for t_conf in self.config['transforms']:
+        for t_conf in (self.config.get('transforms') or []):
             t_name = t_conf['name']
             child_name = t_conf['child']
             if child_name in self.object_map:
@@ -674,19 +674,19 @@ class SE3Visualizer:
         debug_path = os.path.join(base_path, "configs", "debug_objects.yaml")
         if os.path.exists(debug_path):
             debug_conf = self.load_config(debug_path)
-            for obj in debug_conf.get('objects', []):
+            for obj in (debug_conf.get('objects') or []):
                 object_library[obj['name']] = obj
                 
         # 2. Standard Config (Model Objects)
         model_path = os.path.join(base_path, "configs", "config.yaml")
         if os.path.exists(model_path):
             model_conf = self.load_config(model_path)
-            for obj in model_conf.get('objects', []):
+            for obj in (model_conf.get('objects') or []):
                 object_library[obj['name']] = obj
                 
         # Identify required objects from transforms
         required_objects = set()
-        for t in self.config.get('transforms', []):
+        for t in (self.config.get('transforms') or []):
             if t['parent'] != 'World':
                 required_objects.add(t['parent'])
             if t['child'] != 'World':
@@ -703,7 +703,7 @@ class SE3Visualizer:
 
     def _link_objects(self):
         """Link parent and child objects based on config."""
-        for t_config in self.config['transforms']:
+        for t_config in (self.config.get('transforms') or []):
             parent_name = t_config['parent']
             child_name = t_config['child']
             
@@ -728,7 +728,7 @@ class SE3Visualizer:
         # 1. Parse explicit local transforms from config
         explicit_transforms = {}
         dynamic_transforms = {}
-        for t in self.config.get('transforms', []):
+        for t in (self.config.get('transforms') or []):
             if 'initial_transform' in t:
                 explicit_transforms[t['child']] = np.array(t['initial_transform'])
             if t.get('type') == 'dynamic_annotation':
@@ -815,7 +815,7 @@ class SE3Visualizer:
 
     def _load_custom_vectors(self):
         """Load custom vector definitions from config."""
-        for vec_config in self.config.get('vectors', []):
+        for vec_config in (self.config.get('vectors') or []):
             name = vec_config['name']
             parent = vec_config['parent']
             lm_label = vec_config['landmark_label']
@@ -849,7 +849,7 @@ class SE3Visualizer:
         deps = []
         for token in tokens:
             # Find transform config with this name (case-insensitive)
-            for t_conf in self.config['transforms']:
+            for t_conf in (self.config.get('transforms') or []):
                 if t_conf['name'].lower() == token.lower():
                     dep_child_name = t_conf['child']
                     dep_obj = self.object_map.get(dep_child_name)
@@ -860,7 +860,9 @@ class SE3Visualizer:
 
     def _apply_constraints(self):
         """Apply constraints defined in config."""
-        for t in self.config.get('transforms', []):
+        for t in (self.config.get('transforms') or []):
+            if t.get('type') == 'dependent': continue
+
             if 'constraint' in t:
                 child_name = t['child']
                 obj = self.object_map.get(child_name)
@@ -883,7 +885,7 @@ class SE3Visualizer:
 
     def _load_annotations(self):
         """Load annotations from config."""
-        for ann_config in self.config.get('annotations', []):
+        for ann_config in (self.config.get('annotations') or []):
             # Top-level config for this file/group
             group_name = ann_config.get('name', 'annotation')
             type_ = ann_config.get('type', 'vector')
@@ -1168,7 +1170,7 @@ class SE3Visualizer:
 
     def _update_dependent_transforms(self):
         """Update visualization for dependent transforms."""
-        for t_config in self.config['transforms']:
+        for t_config in (self.config.get('transforms') or []):
             # Allow 'dependent', 'dynamic_annotation', or any transform with dynamic: true
             t_type = t_config.get('type')
             is_dynamic = t_config.get('dynamic', False)
@@ -1268,7 +1270,7 @@ class SE3Visualizer:
         # Key: Annotation Name, Value: List of transform configs
         ann_transforms = {}
         
-        for t_config in self.config.get('transforms', []):
+        for t_config in (self.config.get('transforms') or []):
             if not t_config.get('dynamic', False):
                 continue
             
@@ -1282,7 +1284,7 @@ class SE3Visualizer:
         # Process each annotation group
         for ann_name, t_configs in ann_transforms.items():
             # Find annotation config
-            ann_config = next((a for a in self.config.get('annotations', []) if a.get('name') == ann_name), None)
+            ann_config = next((a for a in (self.config.get('annotations') or []) if a.get('name') == ann_name), None)
             if not ann_config: continue
             
             # Only process reference planes here (trajectories are handled by _update_dynamic_annotations)

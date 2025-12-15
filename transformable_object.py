@@ -303,8 +303,12 @@ class TransformableObject:
                 try:
                     # Build available transforms map for parser
                     available = {}
+                    skipped_self_refs = []
+                    
                     for t_name, obj in transform_map.items():
-                        if obj == self: continue # Prevent direct self-reference
+                        if obj == self: 
+                            skipped_self_refs.append(t_name)
+                            continue # Prevent direct self-reference
                         
                         # We expose all objects in the map
                         # The parser expects { 'matrix': ..., 'editable': ... }
@@ -318,31 +322,41 @@ class TransformableObject:
                     result_matrix = transform_parser.parse_transform_expression(self.constraint_expression, available)
                     
                     # Apply
-                    self.local_transform.data = result_matrix
-                    self.scale = np.ones(3) # Reset scale
-                    
+                    try:
+                        self.local_transform.data = result_matrix
+                        self.scale = np.ones(3) # Reset scale
+                    except Exception as e_assign:
+                         # Fallback to robust decomposition if direct assignment fails (e.g. non-rigid)
+                        logging.debug(f"[{self.name}] Direct assignment failed ({e_assign}), attempting robust decomposition.")
+                        
+                        # Decompose result to get R and t
+                        R = result_matrix[:3, :3]
+                        t = result_matrix[:3, 3]
+                        
+                        # Extract scale from result
+                        res_scale = np.linalg.norm(R, axis=0)
+                        res_scale[res_scale < 1e-9] = 1.0
+                        R_norm = R / res_scale
+                        
+                        T_rigid = np.eye(4)
+                        T_rigid[:3, :3] = R_norm
+                        T_rigid[:3, 3] = t
+                        
+                        self.local_transform = kg.FrameTransform(T_rigid)
+                        logging.debug(f"[{self.name}] Updated from constraint (robust): {self.constraint_expression}")
+
                 except Exception as e:
-                    logging.error(f"[{self.name}] Error evaluating constraint '{self.constraint_expression}': {e}")
-                    # Decompose result to get R and t
-                    R = result_matrix[:3, :3]
-                    t = result_matrix[:3, 3]
-                    
-                    # Extract scale from result
-                    res_scale = np.linalg.norm(R, axis=0)
-                    res_scale[res_scale < 1e-9] = 1.0
-                    R_norm = R / res_scale
-                    
-                    T_rigid = np.eye(4)
-                    T_rigid[:3, :3] = R_norm
-                    T_rigid[:3, 3] = t
-                    
-                    self.local_transform = kg.FrameTransform(T_rigid)
-                    
-                    # print(f"DEBUG_VIS: [{self.name}] Constraint applied successfully. New Matrix:\n{T_rigid}")
-                    logging.debug(f"[{self.name}] Updated from constraint: {self.constraint_expression}")
-                    
-                except Exception as e:
-                    logging.warning(f"[{self.name}] Failed to evaluate constraint '{self.constraint_expression}': {e}")
+                    # Check for circular dependency
+                    is_circular = False
+                    error_msg = str(e)
+                    for skipped in skipped_self_refs:
+                        if f"'{skipped}' not found" in error_msg or f"'{skipped.lower()}' not found" in error_msg:
+                            logging.error(f"[{self.name}] CRITICAL: Circular Dependency detected! Constraint uses '{skipped}' which maps to this object itself.")
+                            sys.exit(1)
+                            is_circular = True
+                            
+                    if not is_circular:
+                        logging.error(f"[{self.name}] Error evaluating constraint '{self.constraint_expression}': {e}")
 
             # Update Cache
             if self.parent:

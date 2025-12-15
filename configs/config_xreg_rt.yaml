@@ -1,0 +1,158 @@
+logging_level: INFO
+recording_dir: "visualizer_outputs/recordings"
+objects:
+  - name: Phantom
+    abbreviation: P
+    type: model
+    paths:
+      model: "/home/pingcheng/bigss/xreg_rt/default_data/phantom/lumbar_phantom_model.stl"
+      segmentation: "/home/pingcheng/bigss/xreg_rt/default_data/phantom/lumbar_phantom_CT_seg.nii.gz"
+      landmarks: "/home/pingcheng/bigss/xreg_rt/default_data/phantom/lumbar_phantom_3d_landmarks.fcsv"
+    visual_settings:
+      segmentation_color: "lightgray"
+      segmentation_opacity: 0.5
+      landmark_label_font_size: 12
+      landmark_label_color: "lightgray"
+      landmark_point_color: "red"
+      landmark_point_opacity: 1.0
+      frame_transform_color: "lightgreen"
+  
+  - name: PhantomMarker
+    abbreviation: PM
+    type: virtual
+    movable: false
+
+  - name: CArmMarker
+    abbreviation: CM
+    type: virtual
+    movable: false
+
+  - name: OpticalTracker
+    abbreviation: O
+    type: virtual
+    movable: false
+
+  - name: DynamicReferencePlaneFrame1
+    abbreviation: DRP1
+    type: virtual
+    movable: false
+
+  # - name: DynamicReferencePlaneFrame2
+  #   abbreviation: DRP2
+  #   type: virtual
+  #   movable: false
+
+  - name: CArmSource
+    abbreviation: CArm
+    type: virtual
+    movable: false
+    visual_settings:
+      frame_transform_color: "cyan"
+      frame_label_color: "cyan"
+    
+  - name: CArmDetector
+    abbreviation: Det
+    type: virtual
+    movable: false
+    visual_settings:
+      frame_transform_color: "cyan"
+      frame_label_color: "cyan"
+
+
+reference_planes:
+
+  - name: DynamicReferencePlane1
+    parent: DynamicReferencePlaneFrame1
+    width: 300
+    length: 300
+    color: "blue"
+    opacity: 0.2
+    dynamic: true
+  
+
+transforms:
+  - name: W_from_P
+    parent: World
+    child: Phantom
+    type: dependent
+    
+  - name: W_from_O
+    parent: World
+    child: OpticalTracker
+    initial_transform:
+      - [ 1.00000000e+00,  0.00000000e+00,  0.00000000e+00,  5.00000000e+02]
+      - [ 0.00000000e+00,  1.00000000e+00,  0.00000000e+00,  3.00000000e+02]
+      - [ 0.00000000e+00,  0.00000000e+00,  1.00000000e+00,  2.86223009e+02]
+      - [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00]
+
+  - name: O_from_PM
+    parent: OpticalTracker
+    child: PhantomMarker
+
+  - name: O_from_CM
+    parent: OpticalTracker
+    child: CArmMarker
+
+  - name: CM_from_CArmSource
+    parent: CArmMarker
+    child: CArmSource
+    initial_transform:
+      - [ 1.00000000e+00,  0.00000000e+00,  0.00000000e+00,  0.00000000e+00]
+      - [ 0.00000000e+00,  1.00000000e+00,  0.00000000e+00,  0.00000000e+00]
+      - [ 0.00000000e+00,  0.00000000e+00,  1.00000000e+00,  1.86223009e+02]
+      - [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00]
+
+  - name: PM_from_P
+    parent: PhantomMarker
+    child: Phantom
+    initial_transform:
+      - [ 1.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.10000000e+01]
+      - [ 0.00000000e+00,  1.00000000e+00,  0.00000000e+00,  1.20000000e+01]
+      - [ 0.00000000e+00,  0.00000000e+00,  1.00000000e+00,  1.6223009e+01]
+      - [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00]
+
+
+vectors:
+  # - name: p_tip
+  #   parent: Device
+  #   landmark_label: DrillTip
+  #   landmark_object: Device
+  # - name: v_tip
+  #   parent: World
+  #   landmark_label: DrillTip
+  #   landmark_object: Device
+
+annotations:
+  # - name: slicer_dynamic_trajectory_annotation
+  #   path: "/tmp/slicer_surgery_planner_points.txt"
+  #   type: vector
+  #   parent: Phantom
+  #   dynamic: true
+  #   update_frequency: 1
+  #   landmarks:
+  #     - name: traj_1
+  #       start: Entry_1
+  #       end: Target_1
+  #     - name: traj_2
+  #       start: Entry_2
+  #       end: Target_2
+  #     - name: traj_3
+  #       start: Entry_3
+  #       end: Target_3
+
+  # - name: slicer_dynamic_reference_plane_annotation
+  #   type: reference_plane
+  #   dynamic: true
+  #   update_frequency: 1
+  #   parent: Phantom
+  #   path: "/tmp/slicer_surgery_planner_planes.txt"
+
+  # - name: fcsv_injection_annotation
+  #   path: "example/meta_data/annotations/injection_trajectory/injection_trajectory.fcsv"
+  #   type: vector
+  #   parent: Phantom
+  #   dynamic: false
+  #   landmarks:
+  #     - name: inj_traj
+  #       start: Entry_1
+  #       end: Target_1
