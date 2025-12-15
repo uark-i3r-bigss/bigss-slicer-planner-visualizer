@@ -8,24 +8,16 @@ objects:
       model: "/home/pingcheng/bigss/xreg_rt/default_data/phantom/lumbar_phantom_model.stl"
       segmentation: "/home/pingcheng/bigss/xreg_rt/default_data/phantom/lumbar_phantom_CT_seg.nii.gz"
       landmarks: "/home/pingcheng/bigss/xreg_rt/default_data/phantom/lumbar_phantom_3d_landmarks.fcsv"
-    visual_settings:
-      segmentation_color: "lightgray"
-      segmentation_opacity: 0.5
-      landmark_label_font_size: 12
-      landmark_label_color: "lightgray"
-      landmark_point_color: "red"
-      landmark_point_opacity: 1.0
-      frame_transform_color: "lightgreen"
   
   - name: PhantomMarker
     abbreviation: PM
     type: virtual
-    movable: false
+    movable: true
 
   - name: CArmMarker
     abbreviation: CM
     type: virtual
-    movable: false
+    movable: true
 
   - name: OpticalTracker
     abbreviation: O
@@ -43,20 +35,14 @@ objects:
   #   movable: false
 
   - name: CArmSource
-    abbreviation: CArm
+    abbreviation: CArmSource
     type: virtual
     movable: false
-    visual_settings:
-      frame_transform_color: "cyan"
-      frame_label_color: "cyan"
     
-  - name: CArmDetector
-    abbreviation: Det
-    type: virtual
-    movable: false
-    visual_settings:
-      frame_transform_color: "cyan"
-      frame_label_color: "cyan"
+  # - name: CArmDetector
+  #   abbreviation: CArmDetector
+  #   type: virtual
+  #   movable: false
 
 
 reference_planes:
@@ -88,18 +74,20 @@ transforms:
   - name: O_from_PM
     parent: OpticalTracker
     child: PhantomMarker
+    path: "/home/pingcheng/bigss/bisss-surgery-3d-visualizer/O_from_PM.txt"
 
   - name: O_from_CM
     parent: OpticalTracker
     child: CArmMarker
+    path: "/home/pingcheng/bigss/bisss-surgery-3d-visualizer/O_from_CM.txt"
 
   - name: CM_from_CArmSource
     parent: CArmMarker
     child: CArmSource
     initial_transform:
-      - [ 1.00000000e+00,  0.00000000e+00,  0.00000000e+00,  0.00000000e+00]
-      - [ 0.00000000e+00,  1.00000000e+00,  0.00000000e+00,  0.00000000e+00]
-      - [ 0.00000000e+00,  0.00000000e+00,  1.00000000e+00,  1.86223009e+02]
+      - [ 1.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.600000000e+01]
+      - [ 0.00000000e+00,  1.00000000e+00,  0.00000000e+00,  1.500000000e+01]
+      - [ 0.00000000e+00,  0.00000000e+00,  1.00000000e+00,  1.386223009e+01]
       - [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00]
 
   - name: PM_from_P

@@ -1440,6 +1440,63 @@ class SE3Visualizer:
             ]
             logging.info(f"Calculated Scene Bounds: {self.fixed_grid_bounds}")
 
+    def _update_explicit_file_transforms(self):
+        """Update transforms that have a direct 'path' attribute in config."""
+        current_time = time.time()
+        
+        for t_config in (self.config.get('transforms') or []):
+            file_path = t_config.get('path')
+            # Only process if path is set and not empty
+            if not file_path:
+                continue
+                
+            child_name = t_config['child']
+            obj = self.object_map.get(child_name)
+            if not obj: continue
+            
+            # Check File Existence & Frequency
+            if not os.path.exists(file_path):
+                continue
+                
+            try:
+                mtime = os.path.getmtime(file_path)
+                last_mtime = self.dynamic_file_mtimes.get(file_path, 0)
+                
+                if mtime <= last_mtime:
+                    continue
+                    
+                self.dynamic_file_mtimes[file_path] = mtime
+                
+                # Parse File (Assume 4x4 matrix, text-based)
+                # Supports space or comma separated
+                # Ignores lines starting with #
+                matrix_values = []
+                with open(file_path, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith('#'): continue
+                        # Replace commas with spaces to handle both formats
+                        parts = line.replace(',', ' ').split()
+                        matrix_values.extend([float(x) for x in parts])
+                        
+                if len(matrix_values) >= 16:
+                    matrix = np.array(matrix_values[:16]).reshape(4, 4)
+                    
+                    # Update Object
+                    # Check for change
+                    current_local = obj.local_transform.data
+                    if not np.allclose(current_local, matrix, atol=1e-3):
+                        obj.local_transform.data = matrix
+                        # Reset scale if assumed rigid
+                        obj.scale = np.ones(3)
+                        
+                        logging.info(f"[{t_config['name']}] Updated from file: {file_path}")
+                else:
+                    logging.warning(f"[{t_config['name']}] Invalid matrix in file (got {len(matrix_values)} values): {file_path}")
+
+            except Exception as e:
+                logging.error(f"[{t_config['name']}] Error reading file transform: {e}")
+
     def update_grid(self):
         """Update grid display based on settings."""
         if self.adjustable_grid:
@@ -1558,6 +1615,30 @@ class SE3Visualizer:
         except Exception as e:
             logging.error(f"Error during logging: {e}")
 
+    def update_scene(self):
+        """Update scene actors based on object transforms."""
+        self.update_grid()
+        
+        # 1. Update Dynamic Inputs (Local Transforms)
+        self._update_dynamic_transforms()
+        self._update_dynamic_annotations()
+        
+        # 2. Update Explicit File Transforms
+        self._update_explicit_file_transforms()
+        
+        # 3. Apply Constraints (Kinematic Chain)
+        # (This part is not implemented yet, but would go here)
+        
+        # 4. Update All Objects (Global Transforms & Actors)
+        for obj in self.objects:
+            obj.update_transform(self.transform_map)
+            
+        # 5. Update Dependent Visuals (Arrows, Planes, etc.)
+        self._update_dependent_transforms()
+        self.update_reference_planes()
+        self.update_custom_vectors()
+        self.update_annotations()
+
     def show(self):
 
         # Create Control Panel
@@ -1568,6 +1649,7 @@ class SE3Visualizer:
             # 1. Update Dynamic Inputs (Local Transforms)
             self._update_dynamic_transforms() 
             self._update_dynamic_annotations()
+            self._update_explicit_file_transforms() # <--- Added explicit file updates
             
             # 2. Update All Objects (Global Transforms & Actors)
             for obj in self.objects:
