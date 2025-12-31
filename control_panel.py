@@ -79,7 +79,28 @@ class ControlPanel:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Tab 1: FrameTransform
+        # Tab 1: Frames (New First Tab)
+        self.tab_frames = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_frames, text="Frames")
+        
+        # Frames Tab Content Wrapper (Scrollable)
+        self.frames_canvas = tk.Canvas(self.tab_frames)
+        self.frames_scrollbar = ttk.Scrollbar(self.tab_frames, orient="vertical", command=self.frames_canvas.yview)
+        self.frames_scrollable_frame = ttk.Frame(self.frames_canvas)
+        
+        self.frames_scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.frames_canvas.configure(
+                scrollregion=self.frames_canvas.bbox("all")
+            )
+        )
+        self.frames_canvas.create_window((0, 0), window=self.frames_scrollable_frame, anchor="nw")
+        self.frames_canvas.configure(yscrollcommand=self.frames_scrollbar.set)
+        
+        self.frames_canvas.pack(side="left", fill="both", expand=True)
+        self.frames_scrollbar.pack(side="right", fill="y")
+        
+        # Tab 2: FrameTransform
         self.tab_transform = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_transform, text="FrameTransform")
 
@@ -104,7 +125,9 @@ class ControlPanel:
         
         # Force initial width to match canvas
         self.canvas.update_idletasks()
-        self.canvas.itemconfig(self.canvas_window, width=self.canvas.winfo_width())
+        try:
+            self.canvas.itemconfig(self.canvas_window, width=self.canvas.winfo_width())
+        except: pass
         
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
 
@@ -132,6 +155,9 @@ class ControlPanel:
         self.tab_settings = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_settings, text="Settings")
         
+        # --- Frames Tab Content ---
+        self._create_frames_list(self.frames_scrollable_frame)
+
         # --- FrameTransform Tab Content ---
         
         # Object Selection
@@ -170,6 +196,122 @@ class ControlPanel:
         
         # Start GUI update loop
         self.update_gui()
+
+    def _create_frames_list(self, parent):
+        # --- Individual Frames List ---
+        # List all frames
+        for obj in self.viz.objects:
+            if obj.name == "World": continue # Skip World? Or keep it? Usually hidden.
+            
+            frame = ttk.LabelFrame(parent, text=f"{obj.name} ({obj.abbreviation})", padding="2")
+            frame.pack(fill=tk.X, pady=2, padx=5)
+            
+            # 1. Toggle Frame (Axes/Label)
+            # We need a variable for this. We can attach it to the object or store in a dict.
+            # TransformableObject has 'visible' which usually toggles EVERYTHING. 
+            # We want specific toggles.
+            # Let's assume we can add methods to TransformableObject or modify properties directly.
+            # For now, let's use checkbuttons that call specific lambdas.
+            
+            # Frame Visibility
+            frame_var = tk.BooleanVar(value=True) # Default on?
+            # Check actual state if possible
+            if hasattr(obj, 'show_frame_actors'): # We might need to implement this prop
+                 frame_var.set(obj.show_frame_actors)
+            
+            chk_frame = ttk.Checkbutton(frame, text="Show Frame (Axes)", variable=frame_var,
+                                      command=lambda o=obj, v=frame_var: self.toggle_frame_visibility(o, v.get()))
+            chk_frame.pack(anchor=tk.W)
+            
+            # 2. Toggle Model (Mesh/Seg) - Only if it has one
+            if obj.actor or obj.segmentation_actor or (obj.obj_type == 'model'):
+                model_var = tk.BooleanVar(value=obj.show_model)
+                chk_model = ttk.Checkbutton(frame, text="Show Model", variable=model_var,
+                                          command=lambda o=obj, v=model_var: self.toggle_model_visibility(o, v.get()))
+                chk_model.pack(anchor=tk.W)
+            
+            # 3. Toggle Landmarks - Only if it has them
+            if obj.landmarks:
+                lm_var = tk.BooleanVar(value=obj.show_landmarks)
+                chk_lm = ttk.Checkbutton(frame, text="Show Landmarks", variable=lm_var,
+                                       command=lambda o=obj, v=lm_var: self.toggle_landmark_visibility(o, v.get()))
+                chk_lm.pack(anchor=tk.W)
+
+    def toggle_frame_visibility(self, obj, visible):
+        # We need to implement logic to hide just the axes/label
+        # Currently 'visible' toggles everything.
+        # We might need to act on `frame_actors` and `frame_label_actor` directly.
+        obj.show_frame_actors = visible # Store state
+        if visible:
+            # Re-enable actors
+            pass # TODO: Logic to show actors
+        else:
+            # Hide actors
+            for actor in obj.frame_actors:
+                actor.VisibilityOff()
+            if obj.origin_label_actor:
+                obj.origin_label_actor.VisibilityOff()
+        
+        # Trigger explicit update if needed or rely on loop
+        # For immediate feedback:
+        if visible:
+             # Force update to recreate/show
+             obj.update_transform(self.viz.transform_map)
+        
+    def toggle_model_visibility(self, obj, visible):
+        obj.show_model = visible
+        obj.show_mesh = visible
+        obj.show_segmentation = visible
+        # update_transform will handle the visibility state application
+        obj.update_transform(self.viz.transform_map)
+        
+    def toggle_landmark_visibility(self, obj, visible):
+        if hasattr(obj, 'set_show_landmarks'):
+            obj.set_show_landmarks(visible) # Stores state and updates
+        else:
+            obj.show_landmarks = visible
+            
+        obj.update_transform(self.viz.transform_map)
+
+    def on_axis_scale_change(self, val):
+        scale = float(val)
+        for obj in self.viz.objects:
+            if hasattr(obj, 'set_frame_scale'):
+                obj.set_frame_scale(scale)
+                
+    def on_label_size_change(self, val):
+        size = int(float(val))
+        for obj in self.viz.objects:
+            if hasattr(obj, 'set_label_size'):
+                obj.set_label_size(size)
+                # Need to force render update if in interactive loop, 
+                # but main loop handles it via plotter.update() eventually.
+                # If stopped, might not update immediately, but usually fine.
+                
+    def on_vector_thickness_change(self, val):
+        scale = float(val)
+        for obj in self.viz.objects:
+            if hasattr(obj, 'set_vector_thickness'):
+                obj.set_vector_thickness(scale)
+                
+    def on_vector_label_size_change(self, val):
+        size = int(float(val))
+        for obj in self.viz.objects:
+            if hasattr(obj, 'set_vector_label_size'):
+                obj.set_vector_label_size(size)
+
+    def on_landmark_size_change(self, val):
+        size = float(val)
+        for obj in self.viz.objects:
+            if hasattr(obj, 'set_landmark_size'):
+                obj.set_landmark_size(size)
+                
+    def on_landmark_label_size_change(self, val):
+        size = int(float(val))
+        for obj in self.viz.objects:
+            if hasattr(obj, 'set_landmark_label_size'):
+                obj.set_landmark_label_size(size)
+
 
     def _create_object_selection(self, parent):
         frame = ttk.LabelFrame(parent, text="Select Transform", padding="5")
@@ -360,15 +502,10 @@ class ControlPanel:
         }
         
         self.vis_checkboxes = {}
-        
-        self.vis_checkboxes['model'] = ttk.Checkbutton(frame, text="Show Model", variable=self.vis_vars['model'], 
-                       command=self.on_vis_change)
-        self.vis_checkboxes['model'].pack(anchor=tk.W)
-        
-        self.vis_checkboxes['landmarks'] = ttk.Checkbutton(frame, text="Show Landmarks", variable=self.vis_vars['landmarks'], 
-                       command=self.on_vis_change)
-        self.vis_checkboxes['landmarks'].pack(anchor=tk.W)
-        
+    
+    # Removed 'model' toggle (Moved to Frames Tab)
+    # Removed 'landmarks' toggle (Moved to Frames Tab)
+    
         self.vis_checkboxes['vector'] = ttk.Checkbutton(frame, text="Show Transform Vector", variable=self.vis_vars['vector'], 
                        command=self.on_vis_change)
         self.vis_checkboxes['vector'].pack(anchor=tk.W)
@@ -555,22 +692,62 @@ class ControlPanel:
         ttk.Checkbutton(frame, text="Adjustable Grid (Auto-fit)", variable=self.grid_var,
                        command=self.on_grid_change).pack(anchor=tk.W, pady=5)
                        
-        # Axes Length Slider
-        ttk.Label(frame, text="Axes Length:").pack(anchor=tk.W)
+        # Global Frame Settings (Consolidated)
+        # Axis Scale Slider
+        ttk.Label(frame, text="Axis Size:").pack(anchor=tk.W)
         
-        axes_frame = ttk.Frame(frame)
-        axes_frame.pack(fill=tk.X, pady=2)
+        self.scale_axis = tk.Scale(frame, from_=5, to=100, orient=tk.HORIZONTAL,
+                                 command=self.on_axis_scale_change)
+        self.scale_axis.set(30) # Default
+        self.scale_axis.pack(fill=tk.X, padx=5, pady=2)
         
-        self.axes_scale_var = tk.DoubleVar(value=30.0) # Default scale
-        scale_slider = ttk.Scale(axes_frame, from_=1.0, to=100.0, variable=self.axes_scale_var, orient=tk.HORIZONTAL)
-        scale_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-        # Removed direct command
+        # Label Size Slider
+        ttk.Label(frame, text="Label Size:").pack(anchor=tk.W)
         
-        self.axes_scale_label = ttk.Label(axes_frame, text="30.0", width=5)
-        self.axes_scale_label.pack(side=tk.LEFT)
+        self.scale_label = tk.Scale(frame, from_=8, to=48, orient=tk.HORIZONTAL,
+                                  command=self.on_label_size_change)
+        self.scale_label.set(14) # Default
+        self.scale_label.pack(fill=tk.X, padx=5, pady=2)
+
+        # Global Transform Settings
+        trans_frame = ttk.LabelFrame(parent, text="Global Transform Settings", padding="5")
+        trans_frame.pack(fill=tk.X, pady=5)
         
-        # Add Set Button
-        ttk.Button(axes_frame, text="Set", width=4, command=self.on_axes_scale_set).pack(side=tk.LEFT)
+        # Arrow Thickness Slider
+        ttk.Label(trans_frame, text="Arrow Thickness:").pack(anchor=tk.W)
+        
+        self.scale_arrow = tk.Scale(trans_frame, from_=0.1, to=15.0, resolution=0.1, orient=tk.HORIZONTAL,
+                                  command=self.on_vector_thickness_change)
+        self.scale_arrow.set(1.0) # Default
+        self.scale_arrow.pack(fill=tk.X, padx=5, pady=2)
+        
+        # Label Size Slider
+        ttk.Label(trans_frame, text="Label Size:").pack(anchor=tk.W)
+        
+        self.scale_vec_label = tk.Scale(trans_frame, from_=8, to=48, orient=tk.HORIZONTAL,
+                                  command=self.on_vector_label_size_change)
+        self.scale_vec_label.set(12) # Default
+        self.scale_vec_label.pack(fill=tk.X, padx=5, pady=2)
+
+        # Global Landmark Settings
+        lm_frame = ttk.LabelFrame(parent, text="Global Landmark Settings", padding="5")
+        lm_frame.pack(fill=tk.X, pady=5)
+        
+        # Landmark Size Slider
+        ttk.Label(lm_frame, text="Landmark Size:").pack(anchor=tk.W)
+        
+        self.scale_lm_size = tk.Scale(lm_frame, from_=0.5, to=10.0, resolution=0.1, orient=tk.HORIZONTAL,
+                                    command=self.on_landmark_size_change)
+        self.scale_lm_size.set(2.0) # Default
+        self.scale_lm_size.pack(fill=tk.X, padx=5, pady=2)
+        
+        # Label Size Slider
+        ttk.Label(lm_frame, text="Label Size:").pack(anchor=tk.W)
+        
+        self.scale_lm_label = tk.Scale(lm_frame, from_=8, to=48, orient=tk.HORIZONTAL,
+                                     command=self.on_landmark_label_size_change)
+        self.scale_lm_label.set(8) # Default
+        self.scale_lm_label.pack(fill=tk.X, padx=5, pady=2)
 
         # Screenshot Settings
         ss_frame = ttk.LabelFrame(parent, text="Screenshot Settings", padding="5")
@@ -1795,6 +1972,8 @@ class ControlPanel:
                     self.vis_checkboxes['model'].configure(state=state)
                 if 'landmarks' in self.vis_checkboxes:
                     self.vis_checkboxes['landmarks'].configure(state=state)
+                if 'vector' in self.vis_checkboxes:
+                    self.vis_checkboxes['vector'].configure(state='normal') # Always allow vector toggle
             else:
                 # Disable visibility controls for dependent transforms
                 if 'model' in self.vis_checkboxes:
@@ -1802,7 +1981,7 @@ class ControlPanel:
                 if 'landmarks' in self.vis_checkboxes:
                     self.vis_checkboxes['landmarks'].configure(state='disabled')
                 if 'vector' in self.vis_checkboxes:
-                    self.vis_checkboxes['vector'].configure(state='disabled')
+                    self.vis_checkboxes['vector'].configure(state='normal') # Always allow vector toggle
         
         # Schedule next update
         self.root.after(100, self.update_gui)

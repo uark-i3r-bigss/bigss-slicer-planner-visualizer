@@ -378,12 +378,15 @@ class SE3Visualizer:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = script_dir
         
-        # Resolve Objects
-        # If config doesn't define objects, look them up in libraries based on transforms
-        if 'objects' not in self.config:
-            self.config['objects'] = self._resolve_objects_from_libraries(project_root)
+        # Resolve Objects (Frames)
+        # If config doesn't define frames/objects, look them up in libraries based on transforms
+        if 'frames' not in self.config and 'objects' not in self.config:
+            self.config['frames'] = self._resolve_objects_from_libraries(project_root)
         
-        for obj_config in (self.config.get('objects') or []):
+        # Priority to 'frames', fallback to 'objects'
+        frame_configs = self.config.get('frames') or self.config.get('objects') or []
+        
+        for obj_config in frame_configs:
             name = obj_config['name']
             abbr = obj_config['abbreviation']
             if abbr == "W":
@@ -1665,8 +1668,6 @@ class SE3Visualizer:
             self.log_data() 
             self.plotter.update()
             self.panel.root.after(16, update_plotter) # ~60 FPS
-
-
 
         # Add key binding for screenshot
         self.plotter.add_key_event('s', self.take_screenshot)

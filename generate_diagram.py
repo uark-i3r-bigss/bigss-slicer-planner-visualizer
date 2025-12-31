@@ -43,7 +43,8 @@ def generate_diagram(config, output_path, format='png'):
     # 1. Add Objects (Nodes)
     # We first collect all objects defined in 'objects' list
     defined_objects = {}
-    for obj in config.get('objects', []):
+    obj_list = config.get('frames') or config.get('objects') or []
+    for obj in obj_list:
         name = obj['name']
         obj_type = obj.get('type', 'model')
         defined_objects[name] = obj_type
@@ -65,7 +66,7 @@ def generate_diagram(config, output_path, format='png'):
 
     # 2. Add Transforms (Edges)
     # Track which nodes are connected to ensure we add implicit nodes if missing from 'objects'
-    for t in config.get('transforms', []):
+    for t in (config.get('transforms') or []):
         parent = t['parent']
         child = t['child']
         name = t['name']
@@ -81,7 +82,7 @@ def generate_diagram(config, output_path, format='png'):
         dot.edge(parent, child, label=name)
 
     # 3. Add Vectors
-    for i, vec in enumerate(config.get('vectors', [])):
+    for i, vec in enumerate(config.get('vectors') or []):
         name = vec['name']
         parent = vec['parent']
         
@@ -99,7 +100,7 @@ def generate_diagram(config, output_path, format='png'):
     # Pre-process transforms to find dynamic annotation mappings
     # Map (annotation_name, vector_name) -> child_frame_name
     dynamic_vector_map = {}
-    for t in config.get('transforms', []):
+    for t in (config.get('transforms') or []):
         if t.get('type') == 'dynamic_annotation':
             ann_name = t.get('annotation_name')
             vec_name = t.get('vector_name')
@@ -107,7 +108,7 @@ def generate_diagram(config, output_path, format='png'):
             if ann_name and vec_name and child:
                 dynamic_vector_map[(ann_name, vec_name)] = child
 
-    for i, ann in enumerate(config.get('annotations', [])):
+    for i, ann in enumerate(config.get('annotations') or []):
         parent = ann['parent']
         ann_name = ann['name']
         

@@ -1,6 +1,6 @@
 logging_level: INFO
 recording_dir: "visualizer_outputs/recordings"
-objects:
+frames:
   - name: Phantom
     abbreviation: P
     type: model

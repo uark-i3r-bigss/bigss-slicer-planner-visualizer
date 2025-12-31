@@ -34,6 +34,7 @@ class TransformableObject:
         self.lm_label_color = self.visual_settings.get('landmark_label_color', self.label_color)
         self.lm_point_color = self.visual_settings.get('landmark_point_color', self.label_color)
         self.lm_point_opacity = self.visual_settings.get('landmark_point_opacity', 0.8)
+        self.lm_point_size = self.visual_settings.get('landmark_point_size', 2.0)
         self.ft_color = self.visual_settings.get('frame_transform_color', 'lightgreen')
         self.frame_label_color = self.visual_settings.get('frame_label_color', self.label_color)
         self.frame_label_size = self.visual_settings.get('frame_label_size', 10)
@@ -86,6 +87,7 @@ class TransformableObject:
         self.show_mesh = False
         self.show_model = True
         self.show_vector = True
+        self.show_frame_actors = True # New Toggle for Frames Tab
         
         if mesh_path and os.path.exists(mesh_path):
             mesh_data = load_mesh(mesh_path, origin=ct_origin)
@@ -118,6 +120,7 @@ class TransformableObject:
         # Create Frame Actors
         self.frame_actors = []
         self.frame_scale = 30.0
+        self.frame_label_size = 14 # Default label size
         self.current_frame_scale = None # To track if frame actors need recreation
         
         # Origin Label Actor
@@ -126,6 +129,8 @@ class TransformableObject:
         # Transform Vector Actors
         self.vector_actor = None
         self.vector_label_actor = None
+        self.vector_thickness_scale = 1.0 # Default thickness scale
+        self.vector_label_size = 12 # Default label size
         
         # Landmarks
         self.landmarks = None
@@ -395,6 +400,38 @@ class TransformableObject:
                 
                 self._last_visual_transform = current_global.copy()
             
+            # Enforce Visibility for Frames explicitly (Handle toggle updates)
+            # This ensures that even if transform didn't change, visibility toggle works
+            should_show_frame = self.visible and self.show_frame_actors
+            
+            for actor in self.frame_actors:
+                if should_show_frame: actor.VisibilityOn()
+                else: actor.VisibilityOff()
+                
+            if self.origin_label_actor:
+                if should_show_frame: self.origin_label_actor.VisibilityOn()
+                else: self.origin_label_actor.VisibilityOff()
+            
+            # Enforce Visibility for Model (Mesh)
+            should_show_model = self.visible and self.show_model
+            
+            if self.actor:
+                # Mesh specific check if needed, but show_model usually covers it
+                if should_show_model and self.show_mesh: self.actor.VisibilityOn()
+                else: self.actor.VisibilityOff()
+                
+            # Enforce Visibility for Segmentation
+            if self.segmentation_actor:
+                if should_show_model and self.show_segmentation: self.segmentation_actor.VisibilityOn()
+                else: self.segmentation_actor.VisibilityOff()
+
+            # Enforce Visibility for Landmarks (moved from visual_update_needed)
+            # This ensures toggle works even if no motion
+            # Note: _update_landmark_transforms handles basic visibility but forceful toggle needs Check
+            # Actually _update_landmark_transforms (called above) checks show_landmarks.
+            # But we should call it if visibility changed but transform didn't.
+            # For now, simplistic approach:
+             
             for child in self.children:
                 child.update_transform(transform_map)
                 
@@ -483,9 +520,12 @@ class TransformableObject:
         direction = vec / length
         
         # Create Arrow Mesh
-        fixed_shaft_radius = 1.5
-        fixed_tip_radius = 4.0
-        fixed_tip_length = 15.0
+        fixed_shaft_radius = 1.5 * self.vector_thickness_scale
+        fixed_tip_radius = 4.0 * self.vector_thickness_scale
+        fixed_tip_length = 15.0 # Keep fixed or scale? Usually tip length depends on radius ratio, let's keep it fixed length for now or maybe scale slightly?
+        # Actually scaling tip length often looks better if thickness increases drastically. 
+        # Let's scale tip length lightly:
+        fixed_tip_length = 15.0 * self.vector_thickness_scale
         
         arrow_mesh = pv.Arrow(start=start, direction=direction, scale=length, 
                         shaft_radius=fixed_shaft_radius/length, 
@@ -512,7 +552,7 @@ class TransformableObject:
             
         self.vector_label_actor = self.plotter.add_point_labels(
             [midpoint], [label_text],
-            font_size=12, text_color=self.ft_color,
+            font_size=self.vector_label_size, text_color=self.ft_color,
             show_points=False, always_visible=False
         )
 
@@ -534,7 +574,7 @@ class TransformableObject:
             
         # Create spheres for each landmark (in Local Frame, transformed by user_matrix)
         for i, point in enumerate(self.landmarks['points']):
-            sphere = pv.Sphere(radius=2.0, center=point)
+            sphere = pv.Sphere(radius=self.lm_point_size, center=point)
             actor = self.plotter.add_mesh(sphere, color=self.lm_point_color, opacity=self.lm_point_opacity, show_scalar_bar=False)
             self.landmarks_actors.append(actor)
 
@@ -578,6 +618,37 @@ class TransformableObject:
         self.show_vector = visible
         self.update_transform()
 
+    def set_frame_scale(self, scale):
+        """Update coordinate frame axis size."""
+        self.frame_scale = float(scale)
+        self._update_coordinate_frame(self.frame_scale)
+
+    def set_label_size(self, size):
+        """Update frame label font size."""
+        self.frame_label_size = int(size)
+        self._update_labels()
+
+    def set_vector_thickness(self, scale):
+        """Update transform vector thickness."""
+        self.vector_thickness_scale = float(scale)
+        self._update_vector()
+
+    def set_vector_label_size(self, size):
+        """Update transform vector label font size."""
+        self.vector_label_size = int(size)
+        self._update_vector()
+
+    def set_landmark_size(self, size):
+        """Update landmark sphere size."""
+        self.lm_point_size = float(size)
+        self._create_landmark_actors()
+        self._update_landmark_transforms()
+
+    def set_landmark_label_size(self, size):
+        """Update landmark label font size."""
+        self.lm_label_size = int(size)
+        self._update_landmark_transforms()
+        
     def reset(self, transform_map=None):
         """Reset transform to initial state."""
         # Reset local transform to initial RIGID transform
